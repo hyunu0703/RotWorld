@@ -1,12 +1,25 @@
 import './style.css';
-import { createWorld } from './simulation/world.ts';
+import './creation.css';
+import type { World } from './simulation/world.ts';
+import { GameSession } from './simulation/session.ts';
+import { mountCreation } from './ui/creation.ts';
 import { SimulationClock } from './simulation/clock.ts';
 import { Scene } from './rendering/scene.ts';
 import { Interface, mountUI } from './ui/interface.ts';
-const world=createWorld(),clock=new SimulationClock();mountUI(world);
-const host=document.querySelector<HTMLElement>('#map')!,scene=new Scene(host,world);
-async function start(){
-  await scene.init();document.querySelector('#loading')!.remove();const ui=new Interface(world,clock,scene);
+const session=new GameSession();
+function showCreation(message=''){
+  mountCreation(async draft=>{
+    const world=session.start(draft);
+    try{await start(world);}catch(error){session.end('세계 로딩 실패');throw error;}
+  },message);
+}
+async function start(world:World){
+  const clock=new SimulationClock();mountUI(world);
+  const host=document.querySelector<HTMLElement>('#map')!,scene=new Scene(host,world);
+  try{await scene.init();}catch(error){if(scene.app.renderer)scene.destroy();throw error;}
+  const abort=new AbortController(),options={signal:abort.signal};
+  const reset=()=>{abort.abort();scene.destroy();session.end('새 회차를 시작하기 위해 기존 회차를 초기화했습니다.');showCreation(session.endReason);};
+  document.querySelector('#loading')!.remove();const ui=new Interface(world,clock,scene,reset);
   const pointers=new Map<number,{x:number;y:number}>();let down={x:0,y:0},moved=false,pinchDistance=0;
   const point=(e:PointerEvent|WheelEvent)=>{const r=host.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};};
   const canvas=scene.app.canvas;
@@ -25,10 +38,11 @@ async function start(){
     if(e.code==='Space'&&!(e.target instanceof HTMLButtonElement)){e.preventDefault();if(!e.repeat)ui.togglePause();}
     if(e.key.toLowerCase()==='f'){scene.fit();ui.update();}
     if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)&&!(e.target instanceof HTMLButtonElement)){e.preventDefault();keys.add(e.key);}
-  });window.addEventListener('keyup',e=>keys.delete(e.key));window.addEventListener('blur',()=>keys.clear());
+  },options);window.addEventListener('keyup',e=>keys.delete(e.key),options);window.addEventListener('blur',()=>keys.clear(),options);
   let last=performance.now(),lastUI=0;
-  document.addEventListener('visibilitychange',()=>{last=performance.now();keys.clear();});
+  document.addEventListener('visibilitychange',()=>{last=performance.now();keys.clear();},options);
   scene.app.ticker.add(()=>{
+    if(!world.active){abort.abort();scene.destroy();showCreation(session.endReason);return;}
     const now=performance.now(),dt=(now-last)/1000;last=now;
     // 숨긴 탭에서는 시제품을 진행하지 않으며, 복귀 후 누적 시간을 몰아서 계산하지 않는다.
     if(!document.hidden){if(dt<2)clock.advance(dt,world);else{clock.paused=true;ui.update();}
@@ -37,4 +51,4 @@ async function start(){
     scene.draw();if(now-lastUI>150){ui.update();lastUI=now;}
   });
 }
-start().catch(error=>{console.error(error);document.querySelector('#loading')!.textContent='도시 화면을 열지 못했습니다. WebGL을 지원하는 브라우저에서 새로고침해 주세요.';});
+showCreation();

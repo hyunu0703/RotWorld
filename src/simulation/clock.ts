@@ -3,7 +3,7 @@ import { stepWorld, type World } from './world.ts';
 export class SimulationClock {
   speed=1; paused=false; private accumulator=0;
   advance(realSeconds:number,world:World) {
-    if(this.paused||realSeconds<=0)return;
+    if(this.paused||!world.active||!Number.isFinite(realSeconds)||realSeconds<=0)return;
     this.accumulator+=realSeconds*this.speed;
     while(this.accumulator+1e-10>=CONFIG.step){
       stepWorld(world,CONFIG.step*CONFIG.gameSecondsPerRealSecond);

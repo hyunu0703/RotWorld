@@ -6,7 +6,7 @@ export class Scene {
   app=new Application(); root=new Container(); people=new Container(); route=new Graphics(); selection=new Graphics();
   camera={x:0,y:0,zoom:1}; selected:number|null=null; follow=false;
   private sprites:Sprite[]=[];private textures:ReturnType<typeof personTexture>[][]=[];
-  private width=1;private height=1;
+  private width=1;private height=1;private resizeObserver:ResizeObserver|null=null;
   constructor(private host:HTMLElement,private world:World){}
   async init(){
     await this.app.init({resizeTo:this.host,background:'#243b33',antialias:false,autoDensity:true,resolution:Math.min(devicePixelRatio,2),preference:'webgl',roundPixels:true});
@@ -14,7 +14,7 @@ export class Scene {
     this.root.addChild(new Sprite(cityTexture(this.world)),this.route,this.selection,this.people);this.app.stage.addChild(this.root);
     for(const c of this.world.citizens){const frames=[personTexture(c.id,0),personTexture(c.id,1)];this.textures.push(frames);const s=new Sprite(frames[0]);s.anchor.set(.5,1);this.people.addChild(s);this.sprites.push(s);}
     this.width=this.host.clientWidth;this.height=this.host.clientHeight;this.fit();
-    new ResizeObserver(()=>{this.width=this.host.clientWidth;this.height=this.host.clientHeight;this.clamp();}).observe(this.host);
+    this.resizeObserver=new ResizeObserver(()=>{this.width=this.host.clientWidth;this.height=this.host.clientHeight;this.clamp();});this.resizeObserver.observe(this.host);
   }
   get minZoom(){return Math.min(this.width/(CONFIG.width*CONFIG.tile),this.height/(CONFIG.height*CONFIG.tile))*.85;}
   fit(){this.camera.zoom=Math.min(this.width/(CONFIG.width*CONFIG.tile),this.height/(CONFIG.height*CONFIG.tile))*.94;this.camera.x=CONFIG.width*CONFIG.tile/2;this.camera.y=CONFIG.height*CONFIG.tile/2;this.follow=false;}
@@ -29,6 +29,8 @@ export class Scene {
     if(this.follow&&chosen){this.camera.x=chosen.x*T;this.camera.y=chosen.y*T;}
     this.root.scale.set(this.camera.zoom);this.root.position.set(Math.round(this.width/2-this.camera.x*this.camera.zoom),Math.round(this.height/2-this.camera.y*this.camera.zoom));
     this.route.clear();this.selection.clear();
+    const main=this.world.mainCharacterId===null?null:this.world.citizens[this.world.mainCharacterId];
+    if(main)this.selection.poly([main.x*T,main.y*T-22,main.x*T-3,main.y*T-26,main.x*T+3,main.y*T-26]).fill(0xe4c779);
     if(chosen){
       this.route.moveTo(chosen.x*T,chosen.y*T);for(const p of chosen.path)this.route.lineTo(p.x*T,p.y*T);
       this.route.stroke({width:1.5/this.camera.zoom,color:0xe4c779,alpha:.8});
@@ -38,4 +40,5 @@ export class Scene {
     for(const c of this.world.citizens){const s=this.sprites[c.id];s.position.set(Math.round(c.x*T),Math.round(c.y*T));s.zIndex=c.y;s.texture=this.textures[c.id][c.path.length?Math.floor(this.world.seconds*2+c.id)%2:0];}
     this.people.sortableChildren=true;
   }
+  destroy(){this.resizeObserver?.disconnect();this.app.destroy(true,{children:true,texture:true,textureSource:true});}
 }

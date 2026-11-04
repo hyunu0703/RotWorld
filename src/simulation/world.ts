@@ -1,12 +1,14 @@
 import { CONFIG } from '../data/config.ts';
+import type { CharacterDraft } from '../data/character.ts';
 export interface Point { x: number; y: number }
 export interface Building { id: number; name: string; kind: string; x: number; y: number; w: number; h: number; color: string; door: Point }
 export interface Citizen extends Point {
   id: number; name: string; age: number; job: string; home: string; money: number; personality: string;
   inventory: string[]; hunger: number; thirst: number; fatigue: number; fear: number;
   path: Point[]; destination: number; wait: number; visits: number; reason: string; action: string;
+  character?:CharacterDraft;
 }
-export interface World { seconds: number; tick: number; citizens: Citizen[]; buildings: Building[]; events: { time: number; text: string }[] }
+export interface World { seconds: number; tick: number; citizens: Citizen[]; buildings: Building[]; events: { time: number; text: string }[]; mainCharacterId:number|null;runId:string;active:boolean }
 const definitions: [string,string,number,number,number,number,string][] = [
   ['해솔 101동','주거',7,6,14,12,'#777e72'],['해솔 102동','주거',7,30,14,11,'#858075'],
   ['한빛 주택','주거',7,54,14,10,'#92776a'],['모퉁이 편의점','상점',36,7,15,10,'#698d88'],
@@ -45,21 +47,23 @@ export function chooseDestination(world:World,c:Citizen) {
   c.action=path?`${b.name} 입구로 이동`:'경로 없음 · 대기';
   if(!path){c.wait=10;record(world,`${c.name}: 경로를 찾지 못했습니다.`);}
 }
-export function createWorld():World {
+export function createWorld(profile?:CharacterDraft):World {
   const buildings=createBuildings();
   const names=['이서윤','김도현','박지우','최민준','정하린','강시우','윤서진','장유진','임수호','한채원','오지안','신태오'];
   const jobs=['간호사','정비사','학생','회사원','요리사','배달원'];
-  const world:World={seconds:0,tick:0,citizens:[],buildings,events:[]};
+  const world:World={seconds:0,tick:0,citizens:[],buildings,events:[],mainCharacterId:profile?0:null,runId:'',active:true};
   for(let id=0;id<CONFIG.population;id++) {
     const b=buildings[id%buildings.length];
     const c:Citizen={id,name:names[id],age:22+id*3,job:jobs[id%6],home:buildings[[0,1,2,11][id%4]].name,
       money:15000+id*2300,personality:['신중한 편','활동적인 편','차분한 편'][id%3],inventory:['개인 가방'],
       hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:''};
+    if(id===0&&profile){c.name=profile.name;c.character=structuredClone(profile);c.personality='모든 성격 축 보통';}
     world.citizens.push(c);chooseDestination(world,c);
   }
   record(world,'관찰 시작 · 인간 12명의 이동 경로를 준비했습니다.');return world;
 }
 export function stepWorld(world:World,seconds:number) {
+  if(!world.active)return;
   world.seconds+=seconds;world.tick++;
   for(const c of world.citizens) {
     if(c.wait>0){c.wait=Math.max(0,c.wait-seconds);if(c.wait===0)chooseDestination(world,c);continue;}
