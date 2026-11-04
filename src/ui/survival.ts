@@ -30,7 +30,7 @@ export class SurvivalPanel {
     const b=this.world.buildings.find(b=>b.id===this.place)!;
     for(const item of ITEMS){host.querySelector(`[data-inventory="${item.id}"]`)!.textContent=`${c.supplies[item.id]}회분`;host.querySelector(`[data-stock="${item.id}"]`)!.textContent=`잔여 ${b.stock[item.id]}회분`;}
     host.querySelector('#capacity')!.textContent=`${stockCount(c.supplies)} / ${SURVIVAL.capacity}회분`;
-    host.querySelector('#sleep-place-info')!.textContent=b.sleepSpot?'시제품 지정 수면 거점 · 실제 좀비 감지는 후속 단계':'수면 거점이 지정되지 않은 장소입니다.';
+    host.querySelector('#sleep-place-info')!.textContent=b.sleepSpot?'지정 수면 거점 · 안전 보장 없음, 수면 중 소음·접촉 각성':'수면 거점이 지정되지 않은 장소입니다.';
     host.querySelector('#survival-feedback')!.textContent=this.message;
     host.querySelector('.survival-readout')!.textContent=survivalDescription(c);
   }

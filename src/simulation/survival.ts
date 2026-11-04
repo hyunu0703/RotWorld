@@ -1,3 +1,6 @@
+import { contactFraction } from './contact.ts';
+import { emitNoise,walkingNoise } from './noise.ts';
+import { sleepThreatNearby } from '../ai/threat.ts';
 import { ITEMS, SURVIVAL, stock, stockCount, type Stock, type ItemId, type Interaction, type Activity } from '../data/survival.ts';
 import { CONFIG } from '../data/config.ts';
 import { record, findPath, stepTour, chooseDestination, type Citizen, type World, type Building, type Point } from './world.ts';
@@ -52,11 +55,13 @@ function startInteraction(world:World,c:Citizen,intent:Interaction,source=c.acti
   }
   if(intent.kind==='sleep'){
     if(!b.sleepSpot)return '이 장소에는 지정된 수면 거점이 없습니다.';
+    if(source==='ai'&&world.stageSix&&sleepThreatNearby(c))return '인지한 8타일 이내 좀비 때문에 수면할 수 없습니다.';
     if(c.fatigue<=0)return '피로가 없어 더 수면할 필요가 없습니다.';
-    c.activity={kind:'sleep',buildingId:b.id};c.action=`${b.name} 거점에서 수면`;c.reason=`${prefix}: 확인한 수면 거점에서 피로를 회복합니다. 좀비 감지는 후속 단계입니다.`;
+    c.threat.visible=[];c.threat.processedNoise=world.nextNoise-1;c.activity={kind:'sleep',buildingId:b.id};c.action=`${b.name} 거점에서 수면`;c.reason=`${prefix}: 확인한 수면 거점에서 피로를 회복합니다. 수면 중에는 보지 못하며 가까운 소음·접촉에 깨어납니다.`;
   }else {
     const error=transferError(c,b,intent.kind,intent.item);if(error)return error;
     const effects=handlingEffects(c);
+    emitNoise(world,c,'handling');
     c.activity={kind:'handling',mode:intent.kind,buildingId:b.id,item:intent.item,remaining:SURVIVAL.handlingSeconds*effects.multiplier,effects};
     c.action=`${ITEMS.find(i=>i.id===intent.item)!.name} ${intent.kind==='take'?'획득':'보관'} 중`;
     c.reason=`${prefix}: 물품 취급 완료 시 장소와 소지품 사이에서 1회분을 이전합니다.`;
@@ -71,6 +76,7 @@ export function issueCommand(world:World,id:number,command:SurvivalCommand,optio
     const item=ITEMS.find(i=>i.id===command.item);if(!item)return '알 수 없는 물품입니다.';
     if(c.supplies[item.id]<1)return `${item.name}을 가지고 있지 않습니다.`;
     if((item.hunger&&c.hunger<=0)||(item.thirst&&c.thirst<=0))return '이미 해당 욕구가 해소되어 있습니다.';
+    emitNoise(world,c,'consume');
     c.path=[];c.wait=0;c.activity={kind:'consume',item:item.id,remaining:item.useSeconds};c.action=item.id==='water'?'수분 섭취 중':`${item.name} 섭취 중`;
     c.reason=`${prefix}: 섭취가 완료되면 소지품 1회분을 소비하고 욕구가 감소합니다.`;
   }else if(command.kind==='rest'){
@@ -94,7 +100,7 @@ export function issueCommand(world:World,id:number,command:SurvivalCommand,optio
   }
   c.actionSource=source;
   if(source==='player'){
-    c.brain.enabled=false;c.brain.goal=null;
+    c.brain.enabled=false;c.brain.goal=null;c.threat.fleeing=false;
     const d={time:world.seconds,source:'player' as const,action:c.action,reason:c.reason,goal:null,alternatives:[]};
     c.brain.decision=d;c.brain.history.unshift(structuredClone(d));c.brain.history.length=Math.min(8,c.brain.history.length);
   }
@@ -105,6 +111,7 @@ function completeHandling(world:World,c:Citizen,a:Extract<Activity,{kind:'handli
   const error=!b||!atBuilding(c,b)?'물품 취급 위치를 벗어났습니다.':transferError(c,b,a.mode,a.item);
   if(error){idle(c,error);c.brain.nextSense=0;record(world,`${c.name}: ${error}`);return;}
   const amount=a.mode==='take'?1:-1;b!.stock[a.item]-=amount;c.supplies[a.item]+=amount;
+  emitNoise(world,c,'handling');
   c.brain.nextSense=0;
   const text=`${ITEMS.find(i=>i.id===a.item)!.name} 1회분 ${a.mode==='take'?'획득':'보관'} 완료`;
   idle(c,text);record(world,`${c.name}: ${text}`);
@@ -118,9 +125,9 @@ export function advanceSurvival(world:World,c:Citizen,seconds:number){
       let distance=0;let point:Point=c;for(const next of c.path){distance+=Math.hypot(next.x-point.x,next.y-point.y);point=next;}
       const duration=Math.min(remaining,c.wait>0?c.wait:distance/CONFIG.walkTilesPerGameSecond);
       if(duration<=1e-9){stepTour(world,c,0);continue;}
-      changeNeeds(c,duration,'awake',c.wait>0?'idle':'walk');stepTour(world,c,duration);remaining-=duration;continue;
+      const from={x:c.x,y:c.y},walking=c.wait<=0;changeNeeds(c,duration,'awake',c.wait>0?'idle':'walk');stepTour(world,c,duration);if(walking)walkingNoise(world,c,from,duration,world.seconds-remaining+duration);remaining-=duration;continue;
     }
-    if(a.kind==='idle'||a.kind==='rest'){changeNeeds(c,remaining,a.kind==='rest'?'rest':'awake');break;}
+    if(a.kind==='idle'||a.kind==='rest'||a.kind==='hide'){changeNeeds(c,remaining,a.kind==='rest'?'rest':'awake');break;}
     if(a.kind==='sleep'){
       const b=world.buildings.find(b=>b.id===a.buildingId);
       if(!b||!b.sleepSpot||!atBuilding(c,b)){idle(c,'수면 장소 조건이 달라져 잠에서 깼습니다.');record(world,`${c.name}: 수면 중단`);continue;}
@@ -135,7 +142,15 @@ export function advanceSurvival(world:World,c:Citizen,seconds:number){
         continue;
       }
       const p=c.path[0],dx=p.x-c.x,dy=p.y-c.y,distance=Math.hypot(dx,dy),duration=Math.min(remaining,distance/CONFIG.walkTilesPerGameSecond);
-      if(duration>0){c.x+=distance?dx/distance*CONFIG.walkTilesPerGameSecond*duration:0;c.y+=distance?dy/distance*CONFIG.walkTilesPerGameSecond*duration:0;changeNeeds(c,duration,'awake');remaining-=duration;}
+      if(duration>0){
+        const from={x:c.x,y:c.y},to={x:c.x+(distance?dx/distance*CONFIG.walkTilesPerGameSecond*duration:0),y:c.y+(distance?dy/distance*CONFIG.walkTilesPerGameSecond*duration:0)};
+        const fraction=world.stageSix?contactFraction(from,to,world.zombies):1,walking=duration*fraction;
+        c.x+=(to.x-c.x)*fraction;c.y+=(to.y-c.y)*fraction;
+        if(walking>0){changeNeeds(c,walking,'awake','walk');walkingNoise(world,c,from,walking,world.seconds-remaining+walking);}
+        if(fraction<1){changeNeeds(c,duration-walking,'awake','idle');c.threat.warning='접촉 위험 · 좀비와 겹치는 이동을 멈췄습니다. 직접 명령은 유지됩니다.';}
+        remaining-=duration;
+        if(fraction<1)break;
+      }
       if(distance<=CONFIG.walkTilesPerGameSecond*duration+1e-8){c.x=p.x;c.y=p.y;c.path.shift();}else break;
     }else {
       const duration=Math.min(remaining,a.remaining);changeNeeds(c,duration,'awake');a.remaining-=duration;remaining-=duration;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, stepWorld, type World } from '../src/simulation/world.ts';
+import { createWorld as createThreatWorld, stepWorld, type World } from '../src/simulation/world.ts';
 import { defaultDraft } from '../src/data/character.ts';
 import { ITEMS, SURVIVAL, stock, type ItemId } from '../src/data/survival.ts';
 import { changeNeeds, handlingMultiplier, issueCommand, totalSupplies } from '../src/simulation/survival.ts';
@@ -85,3 +85,5 @@ test('하루 경과에도 재고가 자동 보충되지 않고 경고 반복 억
   assert.equal(c.hunger,100);assert.equal(c.thirst,100);assert.equal(c.fatigue,100);conserved(w);
   const events=structuredClone(w.events);stepWorld(w,10);assert.deepEqual(w.events,events);
 });
+
+function createWorld(profile?:Parameters<typeof createThreatWorld>[0]){return createThreatWorld(profile,{stageSix:false});}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, findPath, walkable, stepWorld } from '../src/simulation/world.ts';
+import { createWorld as createThreatWorld, findPath, walkable, stepWorld } from '../src/simulation/world.ts';
 import { SimulationClock } from '../src/simulation/clock.ts';
 
 test('동일 시간은 프레임 분할과 관계없이 같은 상태, 정지는 완전 보존',()=>{
@@ -26,3 +26,5 @@ test('장시간 이동에도 유효 위치 유지, 도착과 대기 후 다음 �
   for(const c of w.citizens)assert.ok(walkable({x:Math.floor(c.x),y:Math.floor(c.y)},w.buildings));
   assert.ok(w.events.length<=40);assert.ok(w.events.some(e=>e.text.includes('도착')));
 });
+
+function createWorld(profile?:Parameters<typeof createThreatWorld>[0]){return createThreatWorld(profile,{stageSix:false});}

@@ -1,3 +1,4 @@
+import { threatMarkup } from './threat.ts';
 import { setAutonomy } from '../ai/decision.ts';
 import { ITEMS } from '../data/survival.ts';
 import { timeLabel } from '../simulation/clock.ts';
@@ -27,7 +28,7 @@ export class AIPanel {
     const dangers=Object.values(brain.dangers).map(d=>`<li>${esc(d.label)} · 마지막 위치 ${d.x.toFixed(1)}, ${d.y.toFixed(1)} · 관찰 ${timeLabel(d.seenAt)}</li>`).join('');
     const alternatives=brain.decision?.alternatives.map(a=>`<li>${esc(a.action)} · 점수 ${a.score} · 거리 ${a.distance} · 위험 ${a.risk}</li>`).join('')??'';
     const history=brain.history.map(d=>`<li><b>${timeLabel(d.time)} · ${d.source==='ai'?'AI':'플레이어'} · ${esc(d.action)}</b><p>${esc(d.reason)}</p></li>`).join('');
-    const content=`<p class="subtle">개인의 마지막 확인값입니다. 화면의 실제 재고와 다를 수 있습니다. 시각으로 입구를 발견하고 입구에서 재고를 조사합니다. 실제 좀비·소음 감지는 6단계입니다.</p><ul>${memory||'<li>관찰한 장소 없음</li>'}</ul><h4>위험 기억</h4><ul>${dangers||'<li>인지한 위험 없음 · 안전 보장을 뜻하지 않습니다.</li>'}</ul><h4>최근 선택 후보</h4><ul>${alternatives||'<li>비교 후보 없음</li>'}</ul><h4>최근 판단 8건</h4><ol>${history||'<li>기록 없음</li>'}</ol>`;
+    const content=`${threatMarkup(this.world,c)}<p class="subtle">개인의 마지막 확인값입니다. 화면의 실제 재고와 다를 수 있습니다. 시각으로 입구를 발견하고 입구에서 재고를 조사합니다. 좀비 관찰은 0.5초마다 수행하며 잠든 동안은 중단합니다.</p><ul>${memory||'<li>관찰한 장소 없음</li>'}</ul><h4>위험 기억</h4><ul>${dangers||'<li>인지한 위험 없음 · 안전 보장을 뜻하지 않습니다.</li>'}</ul><h4>최근 선택 후보</h4><ul>${alternatives||'<li>비교 후보 없음</li>'}</ul><h4>최근 판단 8건</h4><ol>${history||'<li>기록 없음</li>'}</ol>`;
     const memoryHost=host.querySelector<HTMLElement>('[data-ai-memory]')!;if(memoryHost.innerHTML!==content)memoryHost.innerHTML=content;
   }
 }

@@ -1,3 +1,4 @@
+import { observeThreats } from './threat.ts';
 import type { Citizen, World, Point } from '../simulation/world.ts';
 import { atBuilding } from '../simulation/survival.ts';
 import type { Brain, DangerMemory } from './types.ts';
@@ -14,6 +15,7 @@ export function riskAt(brain:Brain,p:Point){
   return Math.min(100,Object.values(brain.dangers).reduce((sum,d)=>sum+d.severity*Math.max(0,1-Math.hypot(d.x-p.x,d.y-p.y)/(d.radius+4)),0));
 }
 export function observe(world:World,c:Citizen){
+  if(c.activity.kind==='sleep')return;
   const brain=c.brain,sight=AI_CONFIG.sightTiles*(1+((c.character?.stats.perception??5)-5)*.04);
   const visible=(p:Point)=>Math.hypot(p.x-c.x,p.y-c.y)<=sight&&canSee(world,c,p);
   for(const b of world.buildings){
@@ -29,8 +31,9 @@ export function observe(world:World,c:Citizen){
   }
   const seen=new Map<string,DangerMemory>();
   for(const d of world.dangers)if(visible(d))seen.set(d.id,{...d,seenAt:world.seconds});
-  for(const [id,m] of Object.entries(brain.dangers))if(visible(m)&&!seen.has(id)){delete brain.dangers[id];brain.revision++;}
+  for(const [id,m] of Object.entries(brain.dangers))if(!id.startsWith('zombie:')&&visible(m)&&!seen.has(id)){delete brain.dangers[id];brain.revision++;}
   for(const [id,d] of seen){const old=brain.dangers[id];if(!old||old.x!==d.x||old.y!==d.y||old.radius!==d.radius||old.severity!==d.severity)brain.revision++;brain.dangers[id]=d;}
+  if(world.stageSix)observeThreats(world,c);
   brain.risk=riskAt(brain,c);
-  brain.nextSense=world.seconds+AI_CONFIG.senseSeconds;
+  brain.nextSense=world.seconds+(world.stageSix?.5:AI_CONFIG.senseSeconds);
 }

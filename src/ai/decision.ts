@@ -1,3 +1,4 @@
+import { respondToThreat,fearRiskMultiplier,sleepThreatNearby } from './threat.ts';
 import { ITEMS, SURVIVAL, stockCount, type ItemId } from '../data/survival.ts';
 import { CONFIG } from '../data/config.ts';
 import { walkable, record, type Citizen, type World, type Point } from '../simulation/world.ts';
@@ -11,7 +12,7 @@ const goalNames={food:'식량',water:'물',sleep:'수면'};
 function preference(c:Citizen,axis:'risk'|'stockpiling'){return c.character?.personality[axis]??'normal';}
 function reserve(c:Citizen){return preference(c,'stockpiling')==='high'?3:preference(c,'stockpiling')==='low'?1:2;}
 function urgency(c:Citizen,goal:NeedGoal){return (c.brain.needs[goal]?100:20)+(goal==='water'?20:0)+values(c)[goal]*2;}
-function riskPenalty(c:Citizen){return preference(c,'risk')==='high'?.7:preference(c,'risk')==='low'?2:1.3;}
+function riskPenalty(c:Citizen){return (preference(c,'risk')==='high'?.7:preference(c,'risk')==='low'?2:1.3)*fearRiskMultiplier(c.fear);}
 function allowed(c:Citizen){
   const base=preference(c,'risk')==='high'?75:preference(c,'risk')==='low'?30:50;
   const limit=Math.max(base,riskAt(c.brain,c));
@@ -79,7 +80,7 @@ function needsCandidates(world:World,c:Citizen):Candidate[]{
         options.push({command:{kind:'take',buildingId:p.id,item:item.id},action:`${p.name}에서 ${item.name} 확보`,reason:`${active?`${goalNames[goal]} 해결 중`:`${goalNames[goal]} 부족에 대비 중`}: 현재 ${v[goal].toFixed(1)}, 보유 ${carried}회분입니다. ${p.inspectedAt?.toFixed(1)}초에 직접 확인한 ${p.name}에 ${item.name} ${p.stock[item.id]}회분이 남아 있다고 기억합니다. 거리 ${distance.toFixed(1)}타일, 알려진 위험 ${risk.toFixed(0)}, 비축 목표 ${buffer}회분을 비교했습니다.`,goal,key:`take:${p.id}:${item.id}`,score:base-distance/CONFIG.walkTilesPerGameSecond*.18-SURVIVAL.handlingSeconds*handlingMultiplier(c)*.2-risk*riskPenalty(c),distance,risk});
       }
     }else {
-      for(const p of Object.values(brain.places))if(p.sleepSpot){
+      for(const p of Object.values(brain.places))if(p.sleepSpot&&(!active||!sleepThreatNearby(c,p))){
         const distance=Math.hypot(p.x-c.x,p.y-c.y),risk=riskAt(brain,p);
         options.push({command:{kind:active?'sleep':'restAt',buildingId:p.id},action:`${p.name}에서 ${active?'수면':'거처 복귀·휴식'}`,reason:active?`피로 ${c.fatigue.toFixed(1)}로 수면이 필요합니다. 직접 확인한 거점 ${p.name}의 거리 ${distance.toFixed(1)}타일과 알려진 위험 ${risk.toFixed(0)}을 비교했습니다. 피로 20까지 회복합니다.`:`피로 ${c.fatigue.toFixed(1)}로 장거리 탐색 대신 직접 확인한 거점 ${p.name}으로 복귀해 휴식합니다. 거리·알려진 위험을 비교하며 피로 60 전에는 수면을 시작하지 않습니다.`,goal,key:`${active?'sleep':'restAt'}:${p.id}`,score:urgency(c,goal)-distance/CONFIG.walkTilesPerGameSecond*.18-risk*riskPenalty(c),distance,risk});
       }
@@ -89,6 +90,7 @@ function needsCandidates(world:World,c:Citizen):Candidate[]{
 }
 export function think(world:World,c:Citizen){
   const brain=c.brain;if(!brain.enabled)return;
+  if(respondToThreat(world,c))return;
   const v=values(c);for(const goal of ['food','water','sleep'] as const){if(v[goal]>=60)brain.needs[goal]=true;else if(v[goal]<=targets[goal])brain.needs[goal]=false;}
   const changed=brain.plannedRevision!==brain.revision;brain.plannedRevision=brain.revision;brain.nextThink=world.seconds+AI_CONFIG.thinkSeconds;
   // 위험은 세계 전체 정보가 아니라 이 인간의 관찰·기억에서 계산한다.
@@ -126,12 +128,14 @@ export function think(world:World,c:Citizen){
 }
 export function updateAI(world:World,c:Citizen){
   if(world.seconds>=c.brain.nextSense)observe(world,c);
+  if(respondToThreat(world,c))return;
   const urgent=c.hunger>=60&&!c.brain.needs.food||c.thirst>=60&&!c.brain.needs.water||c.fatigue>=60&&!c.brain.needs.sleep;
   if(c.brain.enabled&&(world.seconds>=c.brain.nextThink||urgent||c.brain.revision!==c.brain.plannedRevision||c.activity.kind==='idle'&&c.brain.decision?.goal))think(world,c);
 }
 export function setAutonomy(world:World,id:number,enabled:boolean):string{
   const c=world.citizens.find(c=>c.id===id);if(!world.active||!c)return '인간을 선택해 주세요.';
   c.brain.enabled=enabled;c.brain.goal=null;c.brain.needs={food:false,water:false,sleep:false};c.brain.nextThink=world.seconds;
+  c.threat.fleeing=false;c.threat.nextPlan=0;
   c.path=[];c.wait=0;c.activity={kind:'idle'};c.action=enabled?'자율 생존 시작':'직접 지시 대기';c.actionSource=enabled?'ai':'player';
   c.reason=enabled?'이 인간이 직접 관찰한 사실로 다음 행동을 판단합니다.':'플레이어가 자율 행동을 중단했습니다. 다음 지시를 기다립니다.';
   const d:Decision={time:world.seconds,source:'player',action:c.action,reason:c.reason,goal:null,alternatives:[]};

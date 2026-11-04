@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createWorld, stepWorld, findPath } from '../src/simulation/world.ts';
+import { createWorld as createThreatWorld, stepWorld, findPath } from '../src/simulation/world.ts';
 import { defaultDraft } from '../src/data/character.ts';
 import { stock, ITEMS, SURVIVAL, stockCount } from '../src/data/survival.ts';
 import { issueCommand, totalSupplies } from '../src/simulation/survival.ts';
@@ -163,3 +163,5 @@ test('자율 AI도 같은 게임 시간의 1배속·4배속에서 동일하며 �
   for(let i=0;i<600;i++)ca.advance(1/60,a);for(let i=0;i<150;i++)cb.advance(1/60,b);
   assert.deepEqual(a,b);const before=structuredClone(a);ca.paused=true;ca.advance(1,a);assert.deepEqual(a,before);
 });
+
+function createWorld(profile?:Parameters<typeof createThreatWorld>[0]){return createThreatWorld(profile,{stageSix:false});}

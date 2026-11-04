@@ -15,7 +15,7 @@ export const PERSONALITIES = [
 ] as const;
 export const TRAITS = [
   {id:'quiet',name:'조용한 발걸음',cost:4,opposite:'loud',effect:'걷기 소음 ×0.75',requires:'이동 소음'},
-  {id:'loud',name:'요란한 발걸음',cost:-3,opposite:'quiet',effect:'걷기·달리기 소음 ×1.20',requires:'이동 소음'},
+  {id:'loud',name:'요란한 발걸음',cost:-3,opposite:'quiet',effect:'걷기 소음 ×1.20 (달리기 미구현)',requires:'이동 소음'},
   {id:'organized',name:'정리 습관',cost:2,opposite:'clumsy',effect:'물품 획득·보관 이전 시간 ×0.80',requires:'물품 취급'},
   {id:'clumsy',name:'서투른 손놀림',cost:-2,opposite:'organized',effect:'물품 취급 시간 ×1.25',requires:'물품 취급'},
   {id:'smallEater',name:'소식가',cost:3,opposite:'bigEater',effect:'허기 증가 ×0.85',requires:'허기 변화'},
@@ -41,7 +41,7 @@ export const LEVEL_LABELS:Record<Level,string>={low:'낮음',normal:'보통',hig
 export function personalitySummary(d:CharacterDraft){return PERSONALITIES.map(p=>`${p.name} ${LEVEL_LABELS[d.personality[p.id]]}`).join(' · ');}
 export function traitSummary(d:CharacterDraft){return d.traits.map(id=>TRAITS.find(t=>t.id===id)!.name).join(' · ')||'없음';}
 export function traitEffectStatus(id:TraitId){
-  return ['organized','clumsy','smallEater','bigEater','lightSleeper','heavySleeper'].includes(id)?'생존 행동에 적용됨':`효과는 ${TRAITS.find(t=>t.id===id)!.requires} 연결 후 적용`;
+  return ['quiet','loud','organized','clumsy','smallEater','bigEater','lightSleeper','heavySleeper'].includes(id)?'생존 행동에 적용됨':`효과는 ${TRAITS.find(t=>t.id===id)!.requires} 연결 후 적용`;
 }
 export function defaultDraft():CharacterDraft {return {name:'이서윤',stats:Object.fromEntries(STATS.map(s=>[s.id,5])) as CharacterDraft['stats'],personality:Object.fromEntries(PERSONALITIES.map(p=>[p.id,'normal'])) as CharacterDraft['personality'],traits:[]};}
 export function statPoints(stats:CharacterDraft['stats']) {

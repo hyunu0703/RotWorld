@@ -47,3 +47,11 @@ export function cityTexture(world:World) {
   g.fillStyle='#ded6b2';g.font='10px monospace';g.textAlign='left';g.fillText('HAESOL / DISTRICT 01',5*T,70*T);
   const t=Texture.from(c);t.source.scaleMode='nearest';return t;
 }
+
+export function zombieTexture(frame:number){
+  const c=canvas(12,14),g=c.getContext('2d')!;
+  const r=(x:number,y:number,w:number,h:number,color:string)=>{g.fillStyle=color;g.fillRect(x,y,w,h);};
+  r(2,12,9,2,'#23332b');r(4,1,5,2,'#354339');r(4,3,5,3,'#9ca773');r(7,4,2,1,'#b84f46');
+  r(3,6,7,5,'#626153');r(1,6,3,2,'#9ca773');r(9,7,3,2,'#9ca773');r(4,11,2,frame?2:3,'#404b3d');r(8,11,2,frame?3:2,'#404b3d');
+  const t=Texture.from(c);t.source.scaleMode='nearest';return t;
+}

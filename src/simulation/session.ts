@@ -17,7 +17,7 @@ export class GameSession {
   }
   end(reason:string){
     if(this.status!=='active'||!this.world)return;
-    this.world.active=false;this.world.citizens.length=0;this.world.events.length=0;this.world.buildings.length=0;
+    this.world.active=false;this.world.citizens.length=0;this.world.zombies.length=0;this.world.noises.length=0;this.world.events.length=0;this.world.buildings.length=0;
     this.world=null;this.status='ended';this.endReason=reason;
   }
   // 추후 전투·부상의 실제 사망 확정 사건이 호출한다. 선택 대상과 종료 기준 인물은 독립적이다.
