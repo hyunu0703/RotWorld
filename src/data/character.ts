@@ -33,8 +33,13 @@ export type TraitId = typeof TRAITS[number]['id'];
 export type Level = 'low'|'normal'|'high';
 export interface CharacterDraft { name:string; stats:Record<StatId,number>; personality:Record<PersonalityId,Level>; traits:TraitId[] }
 export interface CharacterAvailability { stats:ReadonlySet<StatId>; personality:ReadonlySet<PersonalityId>; traits:ReadonlySet<TraitId> }
-// 실제 행동에 효과가 연결된 항목만 이 목록에 등록한다. 수식만 존재하는 것은 활성화 근거가 아니다.
-export const LIVE_AVAILABILITY:CharacterAvailability = {stats:new Set(),personality:new Set(),traits:new Set()};
+// 생성 설정의 선택 가능 여부다. 세계의 생존 효과 구현 여부와 구분한다.
+export const CREATION_AVAILABILITY:CharacterAvailability = {
+  stats:new Set(STATS.map(s=>s.id)),personality:new Set(PERSONALITIES.map(p=>p.id)),traits:new Set(TRAITS.map(t=>t.id))
+};
+export const LEVEL_LABELS:Record<Level,string>={low:'낮음',normal:'보통',high:'높음'};
+export function personalitySummary(d:CharacterDraft){return PERSONALITIES.map(p=>`${p.name} ${LEVEL_LABELS[d.personality[p.id]]}`).join(' · ');}
+export function traitSummary(d:CharacterDraft){return d.traits.map(id=>TRAITS.find(t=>t.id===id)!.name).join(' · ')||'없음';}
 export function defaultDraft():CharacterDraft {return {name:'이서윤',stats:Object.fromEntries(STATS.map(s=>[s.id,5])) as CharacterDraft['stats'],personality:Object.fromEntries(PERSONALITIES.map(p=>[p.id,'normal'])) as CharacterDraft['personality'],traits:[]};}
 export function statPoints(stats:CharacterDraft['stats']) {
   const values=STATS.map(s=>stats[s.id]);
@@ -44,9 +49,13 @@ export function traitPoints(ids:readonly string[]) {
   const selected=TRAITS.filter(t=>ids.includes(t.id));
   return 4+Math.min(4,selected.reduce((n,t)=>n+Math.max(0,-t.cost),0))-selected.reduce((n,t)=>n+Math.max(0,t.cost),0);
 }
-export function validateCharacter(d:CharacterDraft,a:CharacterAvailability=LIVE_AVAILABILITY):string[] {
+export function validateCharacter(d:CharacterDraft,a:CharacterAvailability=CREATION_AVAILABILITY):string[] {
   const errors:string[]=[];
   if(typeof d.name!=='string'||!d.name.trim()||[...d.name.trim()].length>16||/[<>\u0000-\u001f\u007f]/.test(d.name))errors.push('이름은 기호 < > 없이 1~16자로 입력해 주세요.');
+  return [...errors,...validateBuild(d,a)];
+}
+export function validateBuild(d:CharacterDraft,a:CharacterAvailability=CREATION_AVAILABILITY):string[] {
+  const errors:string[]=[];
   if(!d.stats||Object.keys(d.stats).length!==STATS.length||STATS.some(s=>!Number.isInteger(d.stats[s.id])||d.stats[s.id]<3||d.stats[s.id]>8))errors.push('스탯은 여섯 항목 모두 3~8의 정수여야 합니다.');
   else {if(statPoints(d.stats)<0)errors.push('스탯 포인트가 부족합니다.');for(const s of STATS)if(!a.stats.has(s.id)&&d.stats[s.id]!==5)errors.push(`${s.name}: 효과가 연결되기 전에는 기본값 5로 유지합니다.`);}
   if(!d.personality||Object.keys(d.personality).length!==PERSONALITIES.length||PERSONALITIES.some(p=>!['low','normal','high'].includes(d.personality[p.id])))errors.push('성격을 낮음·보통·높음 중에서 설정해 주세요.');
@@ -61,4 +70,14 @@ export function validateCharacter(d:CharacterDraft,a:CharacterAvailability=LIVE_
   if(selected.filter(t=>t.cost<0).length>2)errors.push('단점은 최대 2개입니다.');
   if(traitPoints(d.traits)<0)errors.push('특성 포인트가 부족합니다.');
   return errors;
+}
+export type CharacterChange = {kind:'stat';id:StatId;delta:1|-1}|{kind:'personality';id:PersonalityId;level:Level}|{kind:'trait';id:TraitId};
+// 클릭 전 상태는 보존하고, 유효한 변경만 한 번에 반영한다. 이름 입력 오류와 배분 편집은 독립적이다.
+export function changeCharacter(d:CharacterDraft,change:CharacterChange):{draft:CharacterDraft;errors:string[]} {
+  const next=structuredClone(d);
+  if(change.kind==='stat')next.stats[change.id]+=change.delta;
+  else if(change.kind==='personality')next.personality[change.id]=change.level;
+  else next.traits=next.traits.includes(change.id)?next.traits.filter(id=>id!==change.id):[...next.traits,change.id];
+  const errors=validateBuild(next);
+  return {draft:errors.length?d:next,errors};
 }

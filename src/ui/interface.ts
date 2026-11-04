@@ -3,7 +3,7 @@ import { timeLabel } from '../simulation/clock.ts';
 import type { World } from '../simulation/world.ts';
 import type { SimulationClock } from '../simulation/clock.ts';
 import type { Scene } from '../rendering/scene.ts';
-import { STATS, PERSONALITIES } from '../data/character.ts';
+import { STATS, personalitySummary, traitSummary } from '../data/character.ts';
 import { escapeHTML as esc } from './html.ts';
 export function mountUI(world:World){
   document.querySelector('#app')!.innerHTML=`
@@ -62,8 +62,8 @@ export class Interface {
     <div class="status-row"><span class="status-pill">● 이동 관찰</span><button id="follow" class="text-button" aria-pressed="${this.scene.follow}">${this.scene.follow?'추적 해제':'위치 따라가기'} ↗</button></div>
     <div class="info-section"><h3>현재 행동</h3><strong class="action">${c.action}</strong><p class="reason">${c.reason}</p><div class="route-info"><span>목적지</span><b>${this.world.buildings[c.destination].name}</b></div><div class="route-info"><span>위치</span><b id="citizen-position"></b></div></div>
     <div class="info-section"><h3>생존 상태 <span class="subtle">초기값 · 변화 미연결</span></h3><div class="needs">${[['허기',c.hunger],['갈증',c.thirst],['피로',c.fatigue],['공포',c.fear]].map(([n,v])=>`<div><span>${n}</span><strong>${v}<small> / 100</small></strong></div>`).join('')}</div><p class="subtle">신체·활동 여력: 후속 단계에서 연결</p></div>
-    <div class="info-section personal"><h3>인물 정보</h3><div><span>기존 집</span><b>${c.home}</b></div><div><span>성격</span><b>${c.personality}</b></div><div><span>보유금</span><b>${c.money.toLocaleString()}원</b></div><div><span>소지품</span><b>${c.inventory.join(', ')}</b></div></div>
-    ${c.character?`<div class="info-section character-settings"><h3>생성 설정 <span class="subtle">효과 연결 대기</span></h3><p>${STATS.map(s=>`${s.name} <b>${c.character!.stats[s.id]}</b>`).join(' · ')}</p><p>${PERSONALITIES.map(p=>`${p.name} ${({low:'낮음',normal:'보통',high:'높음'})[c.character!.personality[p.id]]}`).join(' · ')}</p><p>특성: 없음</p></div>`:''}`:
+    <div class="info-section personal"><h3>인물 정보</h3><div><span>기존 집</span><b>${c.home}</b></div><div><span>성격</span><b>${c.character?'생성 설정 참조':c.personality}</b></div><div><span>보유금</span><b>${c.money.toLocaleString()}원</b></div><div><span>소지품</span><b>${c.inventory.join(', ')}</b></div></div>
+    ${c.character?`<div class="info-section character-settings"><h3>적용된 생성 설정</h3><p>${STATS.map(s=>`${s.name} <b>${c.character!.stats[s.id]}</b>`).join(' · ')}</p><p>${personalitySummary(c.character)}</p><p>특성: ${traitSummary(c.character)}</p><p class="subtle">설정은 이 인물에 반영되었습니다. 전투·생존·AI 효과는 관련 시스템 연결 후 작동합니다.</p></div>`:''}`:
     '<div class="empty"><span>⌖</span><h2>누구를 관찰할까요?</h2><p>지도 위 인간을 클릭하거나<br>인간 목록에서 선택하세요.</p></div>';
     if(content!==this.lastInspector){document.querySelector('#inspector')!.innerHTML=content;this.lastInspector=content;const follow=document.querySelector<HTMLButtonElement>('#follow');if(follow)follow.onclick=()=>{this.scene.follow=!this.scene.follow;if(this.scene.follow&&c)this.scene.focus(c.id);this.update();};}
     if(c)document.querySelector('#citizen-position')!.textContent=`${c.x.toFixed(1)}, ${c.y.toFixed(1)}`;

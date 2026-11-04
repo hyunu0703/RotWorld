@@ -1,5 +1,6 @@
 import { CONFIG } from '../data/config.ts';
 import type { CharacterDraft } from '../data/character.ts';
+import { personalitySummary } from '../data/character.ts';
 export interface Point { x: number; y: number }
 export interface Building { id: number; name: string; kind: string; x: number; y: number; w: number; h: number; color: string; door: Point }
 export interface Citizen extends Point {
@@ -57,7 +58,7 @@ export function createWorld(profile?:CharacterDraft):World {
     const c:Citizen={id,name:names[id],age:22+id*3,job:jobs[id%6],home:buildings[[0,1,2,11][id%4]].name,
       money:15000+id*2300,personality:['신중한 편','활동적인 편','차분한 편'][id%3],inventory:['개인 가방'],
       hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:''};
-    if(id===0&&profile){c.name=profile.name;c.character=structuredClone(profile);c.personality='모든 성격 축 보통';}
+    if(id===0&&profile){c.name=profile.name;c.character=structuredClone(profile);c.personality=personalitySummary(profile);}
     world.citizens.push(c);chooseDestination(world,c);
   }
   record(world,'관찰 시작 · 인간 12명의 이동 경로를 준비했습니다.');return world;
