@@ -59,6 +59,19 @@ test('40~59 준비 구간의 비축 성향은 실제 확보 선택에 반영',()
   }
 });
 
+test('피로 40~59는 확인한 거점으로 복귀·휴식하고 60 전 수면하지 않음',()=>{
+  const {w,c}=setup();c.fatigue=50;c.x+=3;think(w,c);
+  assert.equal(c.activity.kind,'travel');if(c.activity.kind==='travel')assert.equal(c.activity.interaction.kind,'restAt');
+  assert.match(c.reason,/장거리 탐색 대신/);advance(w,20);assert.equal(c.activity.kind,'rest');
+  const fatigue=c.fatigue;advance(w,60);assert.equal(c.fatigue,fatigue);assert.equal(c.brain.needs.sleep,false);
+  c.fatigue=60;think(w,c);assert.equal(c.activity.kind,'sleep');
+});
+test('사전 거처 복귀는 긴급 욕구·위험에 양보하며 모르는 거점을 사용하지 않음',()=>{
+  const {w,c}=setup();c.fatigue=50;c.x+=3;think(w,c);c.hunger=70;think(w,c);assert.equal(c.activity.kind,'consume');
+  const other=setup();other.c.fatigue=50;other.c.brain.places={};think(other.w,other.c);assert.equal(other.c.activity.kind,'explore');
+  w.dangers=[{id:'fixture',label:'검증용 위험',x:c.x+1,y:c.y,radius:2,severity:90}];observe(w,c);think(w,c);assert.equal(c.brain.decision!.action,'인지한 위험에서 이탈');
+});
+
 test('알고 있는 물자 장소는 거리·위험을 비교하며 고갈 관찰 시 재판단',()=>{
   const {w,c}=setup();c.supplies=stock();c.thirst=70;
   const b=w.buildings[1],entry={x:b.door.x+.5,y:b.door.y+.5};

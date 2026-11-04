@@ -1,6 +1,7 @@
 import { ITEMS, SURVIVAL, stock, stockCount, type Stock, type ItemId, type Interaction, type Activity } from '../data/survival.ts';
 import { CONFIG } from '../data/config.ts';
 import { record, findPath, stepTour, chooseDestination, type Citizen, type World, type Building, type Point } from './world.ts';
+import { advanceCondition, bodyMode, type BodyMode } from './condition.ts';
 const cap=(value:number)=>Math.max(0,Math.min(100,value));
 export function hasTrait(c:Citizen,id:string){return c.character?.traits.some(t=>t===id)??false;}
 export function sleepRecovery(c:Citizen){return 10*(hasTrait(c,'lightSleeper')?1.25:hasTrait(c,'heavySleeper')?.8:1);}
@@ -8,15 +9,31 @@ export function needRates(c:Citizen,mode:'awake'|'rest'|'sleep'=c.activity.kind=
   const hungerFactor=hasTrait(c,'smallEater')?.85:hasTrait(c,'bigEater')?1.2:1;
   return {hunger:(mode==='sleep'?2:4)*hungerFactor,thirst:mode==='sleep'?3:6,fatigue:mode==='sleep'?-sleepRecovery(c):mode==='rest'?0:4};
 }
-export function changeNeeds(c:Citizen,seconds:number,mode?:'awake'|'rest'|'sleep'){
-  const r=needRates(c,mode);c.hunger=cap(c.hunger+r.hunger*seconds/3600);c.thirst=cap(c.thirst+r.thirst*seconds/3600);c.fatigue=cap(c.fatigue+r.fatigue*seconds/3600);
+export function changeNeeds(c:Citizen,seconds:number,mode?:'awake'|'rest'|'sleep',body:BodyMode=mode==='sleep'?'sleep':mode==='rest'?'rest':bodyMode(c)){
+  const r=needRates(c,mode);let remaining=seconds;
+  // 회복 보정·최대치 경계에서 나눠 시간 분할에 따른 계산 차이를 막는다.
+  while(remaining>1e-9){
+    let duration=remaining;
+    for(const key of ['hunger','thirst','fatigue'] as const)for(const boundary of [0,40,60,80,100]){
+      const time=(boundary-c[key])/r[key]*3600;if(time>1e-7&&Number.isFinite(time))duration=Math.min(duration,time);
+    }
+    const intervalFatigue=r.fatigue<0&&(c.fatigue===60||c.fatigue===80)?c.fatigue-1e-8:c.fatigue;
+    c.vitals.pendingAlerts.push(...advanceCondition(c,duration,body,intervalFatigue));
+    for(const key of ['hunger','thirst','fatigue'] as const){
+      c[key]=cap(c[key]+r[key]*duration/3600);
+      for(const boundary of [0,40,60,80,100])if(Math.abs(c[key]-boundary)<1e-9)c[key]=boundary;
+    }
+    c.vitals.pendingAlerts.push(...advanceCondition(c,0,body));remaining-=duration;
+  }
 }
-export function handlingMultiplier(c:Citizen){
+export function handlingEffects(c:Citizen){
   const thirst=c.thirst>=80?.15:0,fatigue=c.fatigue>=80?.25:c.fatigue>=60?.1:0;
   const calm=1-((c.character?.stats.composure??5)-5)*.08;
   const fear=(c.fear>=80?.25:c.fear>=60?.1:0)*calm;
-  return (1+Math.min(.5,thirst+fatigue+fear))*(hasTrait(c,'organized')?.8:hasTrait(c,'clumsy')?1.25:1);
+  const total=thirst+fatigue+fear,capped=Math.min(.5,total),trait=hasTrait(c,'organized')?.8:hasTrait(c,'clumsy')?1.25:1;
+  return {thirst,fatigue,fear,calm,total,capped,trait,multiplier:(1+capped)*trait};
 }
+export function handlingMultiplier(c:Citizen){return handlingEffects(c).multiplier;}
 export function atBuilding(c:Citizen,b:Building){return Math.hypot(c.x-b.door.x-.5,c.y-b.door.y-.5)<=SURVIVAL.interactionDistance;}
 function transferError(c:Citizen,b:Building,mode:'take'|'deposit',item:ItemId){
   if(mode==='take'&&b.stock[item]<1)return '해당 장소의 물자가 고갈되었습니다.';
@@ -29,13 +46,18 @@ function startInteraction(world:World,c:Citizen,intent:Interaction,source=c.acti
   const prefix=source==='ai'?'자율 행동':'플레이어 지시';
   const b=world.buildings.find(b=>b.id===intent.buildingId);if(!b||!atBuilding(c,b))return '장소의 입구에 도착하지 못했습니다.';
   if(intent.kind==='move'){idle(c,`${prefix}: 지정한 목적지에 도착했습니다.`);return '';}
+  if(intent.kind==='restAt'){
+    if(!b.sleepSpot)return '이 장소에는 확인한 수면 거점이 없습니다.';
+    c.activity={kind:'rest'};c.action=`${b.name} 거점에서 휴식`;c.reason=`${prefix}: 피로가 높아지기 전에 확인한 거점으로 복귀했습니다. 휴식은 피로 증가를 멈추며 수면을 대체하지 않습니다.`;return '';
+  }
   if(intent.kind==='sleep'){
     if(!b.sleepSpot)return '이 장소에는 지정된 수면 거점이 없습니다.';
     if(c.fatigue<=0)return '피로가 없어 더 수면할 필요가 없습니다.';
     c.activity={kind:'sleep',buildingId:b.id};c.action=`${b.name} 거점에서 수면`;c.reason=`${prefix}: 확인한 수면 거점에서 피로를 회복합니다. 좀비 감지는 후속 단계입니다.`;
   }else {
     const error=transferError(c,b,intent.kind,intent.item);if(error)return error;
-    c.activity={kind:'handling',mode:intent.kind,buildingId:b.id,item:intent.item,remaining:SURVIVAL.handlingSeconds*handlingMultiplier(c)};
+    const effects=handlingEffects(c);
+    c.activity={kind:'handling',mode:intent.kind,buildingId:b.id,item:intent.item,remaining:SURVIVAL.handlingSeconds*effects.multiplier,effects};
     c.action=`${ITEMS.find(i=>i.id===intent.item)!.name} ${intent.kind==='take'?'획득':'보관'} 중`;
     c.reason=`${prefix}: 물품 취급 완료 시 장소와 소지품 사이에서 1회분을 이전합니다.`;
   }
@@ -61,7 +83,7 @@ export function issueCommand(world:World,id:number,command:SurvivalCommand,optio
     c.path=path;c.wait=0;c.activity={kind:'explore',point:{...command.point}};c.action='주변 구역 탐색';c.reason=`${prefix}: 선택한 구역을 직접 관찰하기 위해 이동합니다.`;
   }else {
     const b=world.buildings.find(b=>b.id===command.buildingId);if(!b)return '장소를 찾을 수 없습니다.';
-    if(command.kind==='sleep'&&(source==='player'||atBuilding(c,b))&&!b.sleepSpot)return '이 장소에는 지정된 수면 거점이 없습니다.';
+    if((command.kind==='sleep'||command.kind==='restAt')&&(source==='player'||atBuilding(c,b))&&!b.sleepSpot)return '이 장소에는 지정된 수면 거점이 없습니다.';
     if((command.kind==='take'||command.kind==='deposit')){
       if(!ITEMS.some(i=>i.id===command.item))return '알 수 없는 물품입니다.';
       const error=source==='ai'&&!atBuilding(c,b)?(command.kind==='take'&&stockCount(c.supplies)>=SURVIVAL.capacity?'소지 한도가 가득 찼습니다.':''):transferError(c,b,command.kind,command.item);if(error)return error;
@@ -92,7 +114,12 @@ export function advanceSurvival(world:World,c:Citizen,seconds:number){
   // 행동 완료 시 남은 시간을 다음 상태에 적용한다. 긴 간격에서도 욕구가 이중 증가하지 않는다.
   while(remaining>1e-9){
     const a=c.activity;
-    if(a.kind==='tour'){changeNeeds(c,remaining,'awake');stepTour(world,c,remaining);break;}
+    if(a.kind==='tour'){
+      let distance=0;let point:Point=c;for(const next of c.path){distance+=Math.hypot(next.x-point.x,next.y-point.y);point=next;}
+      const duration=Math.min(remaining,c.wait>0?c.wait:distance/CONFIG.walkTilesPerGameSecond);
+      if(duration<=1e-9){stepTour(world,c,0);continue;}
+      changeNeeds(c,duration,'awake',c.wait>0?'idle':'walk');stepTour(world,c,duration);remaining-=duration;continue;
+    }
     if(a.kind==='idle'||a.kind==='rest'){changeNeeds(c,remaining,a.kind==='rest'?'rest':'awake');break;}
     if(a.kind==='sleep'){
       const b=world.buildings.find(b=>b.id===a.buildingId);

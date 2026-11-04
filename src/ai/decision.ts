@@ -78,10 +78,10 @@ function needsCandidates(world:World,c:Citizen):Candidate[]{
         }
         options.push({command:{kind:'take',buildingId:p.id,item:item.id},action:`${p.name}에서 ${item.name} 확보`,reason:`${active?`${goalNames[goal]} 해결 중`:`${goalNames[goal]} 부족에 대비 중`}: 현재 ${v[goal].toFixed(1)}, 보유 ${carried}회분입니다. ${p.inspectedAt?.toFixed(1)}초에 직접 확인한 ${p.name}에 ${item.name} ${p.stock[item.id]}회분이 남아 있다고 기억합니다. 거리 ${distance.toFixed(1)}타일, 알려진 위험 ${risk.toFixed(0)}, 비축 목표 ${buffer}회분을 비교했습니다.`,goal,key:`take:${p.id}:${item.id}`,score:base-distance/CONFIG.walkTilesPerGameSecond*.18-SURVIVAL.handlingSeconds*handlingMultiplier(c)*.2-risk*riskPenalty(c),distance,risk});
       }
-    }else if(active){
+    }else {
       for(const p of Object.values(brain.places))if(p.sleepSpot){
         const distance=Math.hypot(p.x-c.x,p.y-c.y),risk=riskAt(brain,p);
-        options.push({command:{kind:'sleep',buildingId:p.id},action:`${p.name}에서 수면`,reason:`피로 ${c.fatigue.toFixed(1)}로 수면이 필요합니다. 직접 확인한 거점 ${p.name}의 거리 ${distance.toFixed(1)}타일과 알려진 위험 ${risk.toFixed(0)}을 비교했습니다. 피로 20까지 회복합니다.`,goal,key:`sleep:${p.id}`,score:urgency(c,goal)-distance/CONFIG.walkTilesPerGameSecond*.18-risk*riskPenalty(c),distance,risk});
+        options.push({command:{kind:active?'sleep':'restAt',buildingId:p.id},action:`${p.name}에서 ${active?'수면':'거처 복귀·휴식'}`,reason:active?`피로 ${c.fatigue.toFixed(1)}로 수면이 필요합니다. 직접 확인한 거점 ${p.name}의 거리 ${distance.toFixed(1)}타일과 알려진 위험 ${risk.toFixed(0)}을 비교했습니다. 피로 20까지 회복합니다.`:`피로 ${c.fatigue.toFixed(1)}로 장거리 탐색 대신 직접 확인한 거점 ${p.name}으로 복귀해 휴식합니다. 거리·알려진 위험을 비교하며 피로 60 전에는 수면을 시작하지 않습니다.`,goal,key:`${active?'sleep':'restAt'}:${p.id}`,score:urgency(c,goal)-distance/CONFIG.walkTilesPerGameSecond*.18-risk*riskPenalty(c),distance,risk});
       }
     }
   }
@@ -108,8 +108,9 @@ export function think(world:World,c:Citizen){
   if(a.kind==='travel'){
     const memory=brain.places[a.interaction.buildingId];
     const empty=a.interaction.kind==='take'&&memory?.stock&&memory.stock[a.interaction.item]===0;
-    const noBed=a.interaction.kind==='sleep'&&memory?.sleepSpot===false;
-    const current=brain.goal?v[brain.goal]:0,emergency=Math.max(c.hunger,c.thirst)>=90&&current<80;
+    const noBed=(a.interaction.kind==='sleep'||a.interaction.kind==='restAt')&&memory?.sleepSpot===false;
+    const preparingRest=a.interaction.kind==='restAt';
+    const current=brain.goal?v[brain.goal]:0,emergency=preparingRest?(c.hunger>=60||c.thirst>=60||brain.needs.sleep):Math.max(c.hunger,c.thirst)>=90&&current<80;
     if(!empty&&!noBed&&!emergency)return;
   }
   const options=needsCandidates(world,c);

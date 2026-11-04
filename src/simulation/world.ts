@@ -6,6 +6,7 @@ import { updateAI } from '../ai/decision.ts';
 import { observe } from '../ai/perception.ts';
 import { initialStock, stock, type Stock, type Activity } from '../data/survival.ts';
 import { advanceSurvival, totalSupplies } from './survival.ts';
+import { createVitals, type Vitals } from './condition.ts';
 export interface Point { x: number; y: number }
 export interface Building { id: number; name: string; kind: string; x: number; y: number; w: number; h: number; color: string; door: Point;stock:Stock;sleepSpot:boolean }
 export interface Citizen extends Point {
@@ -14,6 +15,7 @@ export interface Citizen extends Point {
   path: Point[]; destination: number; wait: number; visits: number; reason: string; action: string;
   character?:CharacterDraft;
   supplies:Stock;activity:Activity;
+  vitals:Vitals;
   brain:Brain;actionSource:'ai'|'player'|'system';
 }
 export interface World { seconds: number; tick: number; citizens: Citizen[]; buildings: Building[]; events: { time: number; text: string }[]; mainCharacterId:number|null;runId:string;active:boolean;consumed:Stock;initialSupplies:Stock;dangers:Omit<DangerMemory,'seenAt'>[] }
@@ -64,9 +66,10 @@ export function createWorld(profile?:CharacterDraft):World {
     const b=buildings[id%buildings.length];
     const c:Citizen={id,name:names[id],age:22+id*3,job:jobs[id%6],home:buildings[[0,1,2,11][id%4]].name,
       money:15000+id*2300,personality:['신중한 편','활동적인 편','차분한 편'][id%3],inventory:['개인 가방'],
-      hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:'',supplies:stock(1,0,1),activity:{kind:'idle'},brain:createBrain(id,!(id===0&&profile)),actionSource:'system'};
+      hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:'',supplies:stock(1,0,1),activity:{kind:'idle'},vitals:createVitals(),brain:createBrain(id,!(id===0&&profile)),actionSource:'system'};
     const npc=defaultDraft();npc.name=c.name;npc.personality.risk=(['low','normal','high'] as const)[id%3];npc.personality.stockpiling=(['low','normal','high'] as const)[Math.floor(id/3)%3];c.character=npc;c.personality=personalitySummary(npc);
     if(id===0&&profile){c.name=profile.name;c.character=structuredClone(profile);c.personality=personalitySummary(profile);}
+    c.vitals=createVitals(c.character.stats.endurance);
     world.citizens.push(c);c.action='주변 관찰';c.reason='직접 관찰한 장소와 개인별 욕구를 바탕으로 다음 행동을 판단합니다.';observe(world,c);
   }
   if(profile){const main=world.citizens[0];main.activity={kind:'idle'};main.path=[];main.destination=0;main.action='행동 지시 대기';main.reason='생존 행동을 직접 지시하거나 자율 생존을 켤 수 있습니다.';}
@@ -79,6 +82,7 @@ export function stepWorld(world:World,seconds:number) {
   for(const c of world.citizens) {
     updateAI(world,c);
     const before=[c.hunger,c.thirst,c.fatigue];advanceSurvival(world,c,seconds);
+    for(const alert of c.vitals.pendingAlerts.splice(0))record(world,`${c.name}: ${alert}`);
     for(const [i,value] of [c.hunger,c.thirst,c.fatigue].entries())if(before[i]<100&&value>=100)record(world,`${c.name}: ${['허기','갈증','피로'][i]} 한계 경고${i<2?' · 지속 피해는 아직 미구현':''}`);
   }
 }
