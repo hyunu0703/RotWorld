@@ -1,1 +1,5 @@
 outputs/
+node_modules/
+.sites-runtime/
+output/
+tmp/
