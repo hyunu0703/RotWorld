@@ -12,7 +12,7 @@ export class SurvivalPanel {
       const id=this.selected();if(id===null)return;
       const kind=button.dataset.survival!;const item=button.dataset.item as ItemId;
       const command:SurvivalCommand=kind==='consume'?{kind,item}:kind==='take'||kind==='deposit'?{kind,buildingId:this.place,item}:kind==='sleep'||kind==='move'?{kind,buildingId:this.place}:{kind:kind as 'rest'|'stop'|'tour'};
-      const error=issueCommand(world,id,command);this.message=error||'행동을 지정했습니다. 시간 진행 중에 실행됩니다.';this.update();
+      const error=issueCommand(world,id,command);this.message=error||'직접 지시로 전환했습니다. 시간 진행 중에 실행됩니다.';this.update();
     });
   }
   choosePlace(id:number){this.place=id;this.message='';this.actor=this.selected();this.update(true);}
@@ -23,14 +23,14 @@ export class SurvivalPanel {
       host.dataset.actor=String(id);host.innerHTML=`<h3>생존 행동 <span class="subtle">선택한 인간에게 지시</span></h3><div class="survival-readout"></div>
       <div class="survival-buttons"><button data-survival="rest">앉아서 휴식</button><button data-survival="stop">행동 중단·기상</button><button data-survival="tour">입구 순회 재개</button></div>
       <h3 class="supply-heading">소지 물자 <span id="capacity"></span></h3><div class="supply-list">${ITEMS.map(i=>`<div><span>${i.name} <b data-inventory="${i.id}"></b></span><button data-survival="consume" data-item="${i.id}">${i.id==='water'?'물 마시기':i.name==='식사'?'식사하기':'간식 먹기'}</button></div>`).join('')}</div>
-      <h3 class="supply-heading">물자·수면 장소</h3><label for="supply-place" class="subtle">장소 선택 (또는 지도 건물 클릭)</label><select id="supply-place">${this.world.buildings.map(b=>`<option value="${b.id}" ${b.id===this.place?'selected':''}>${esc(b.name)}${b.sleepSpot?' · 수면 거점':''}</option>`).join('')}</select>
+      <h3 class="supply-heading">물자·수면 장소</h3><label for="supply-place" class="subtle">실제 장소·재고 (관찰자 정보 / 지도 건물 클릭)</label><select id="supply-place">${this.world.buildings.map(b=>`<option value="${b.id}" ${b.id===this.place?'selected':''}>${esc(b.name)}${b.sleepSpot?' · 수면 거점':''}</option>`).join('')}</select>
       <p id="sleep-place-info" class="subtle"></p><div class="supply-list">${ITEMS.map(i=>`<div><span>${i.name} <b data-stock="${i.id}"></b></span><div><button data-survival="take" data-item="${i.id}">1개 획득</button><button data-survival="deposit" data-item="${i.id}">1개 보관</button></div></div>`).join('')}</div>
       <div class="survival-buttons"><button data-survival="move">이 장소로 이동</button><button data-survival="sleep">거점에서 수면</button></div><p id="survival-feedback" role="status"></p><p class="subtle">획득·보관·수면은 입구에 도착한 뒤 실행합니다. 물자는 자동 보충되지 않습니다. 정지 중에는 행동 시간이 흐르지 않습니다.</p>`;
     }
     const b=this.world.buildings.find(b=>b.id===this.place)!;
     for(const item of ITEMS){host.querySelector(`[data-inventory="${item.id}"]`)!.textContent=`${c.supplies[item.id]}회분`;host.querySelector(`[data-stock="${item.id}"]`)!.textContent=`잔여 ${b.stock[item.id]}회분`;}
     host.querySelector('#capacity')!.textContent=`${stockCount(c.supplies)} / ${SURVIVAL.capacity}회분`;
-    host.querySelector('#sleep-place-info')!.textContent=b.sleepSpot?'시제품 지정 수면 거점 · 위험 감지 AI 미연결':'수면 거점이 지정되지 않은 장소입니다.';
+    host.querySelector('#sleep-place-info')!.textContent=b.sleepSpot?'시제품 지정 수면 거점 · 실제 좀비 감지는 후속 단계':'수면 거점이 지정되지 않은 장소입니다.';
     host.querySelector('#survival-feedback')!.textContent=this.message;
     host.querySelector('.survival-readout')!.textContent=survivalDescription(c);
   }

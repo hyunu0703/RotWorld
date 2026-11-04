@@ -17,4 +17,4 @@ export function initialStock(kind:string):Stock {
 }
 export type Interaction = {kind:'take';buildingId:number;item:ItemId}|{kind:'deposit';buildingId:number;item:ItemId}|{kind:'sleep';buildingId:number}|{kind:'move';buildingId:number};
 export type Activity = {kind:'idle'}|{kind:'tour'}|{kind:'rest'}|{kind:'sleep';buildingId:number}|{kind:'consume';item:ItemId;remaining:number}
-  |{kind:'handling';mode:'take'|'deposit';buildingId:number;item:ItemId;remaining:number}|{kind:'travel';interaction:Interaction};
+  |{kind:'handling';mode:'take'|'deposit';buildingId:number;item:ItemId;remaining:number}|{kind:'travel';interaction:Interaction}|{kind:'explore';point:{x:number;y:number}};

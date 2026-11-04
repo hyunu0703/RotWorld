@@ -6,7 +6,7 @@ import { ITEMS, SURVIVAL, stock, type ItemId } from '../src/data/survival.ts';
 import { changeNeeds, handlingMultiplier, issueCommand, totalSupplies } from '../src/simulation/survival.ts';
 import { SimulationClock } from '../src/simulation/clock.ts';
 const close=(a:number,b:number)=>assert.ok(Math.abs(a-b)<1e-7,`${a} != ${b}`);
-const setup=()=>{const w=createWorld(defaultDraft()),c=w.citizens[0];return {w,c};};
+const setup=()=>{const w=createWorld(defaultDraft()),c=w.citizens[0];for(const person of w.citizens)person.brain.enabled=false;return {w,c};};
 function conserved(w:World){const total=totalSupplies(w);for(const item of ITEMS){assert.equal(total[item.id]+w.consumed[item.id],w.initialSupplies[item.id]);for(const c of w.citizens)assert.ok(c.supplies[item.id]>=0);for(const b of w.buildings)assert.ok(b.stock[item.id]>=0);}}
 test('깨어 있음·휴식·수면의 시간당 욕구 변화와 범위 제한',()=>{
   const {c}=setup();changeNeeds(c,3600,'awake');close(c.hunger,24);close(c.thirst,21);close(c.fatigue,14);

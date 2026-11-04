@@ -35,7 +35,7 @@ export class Scene {
     if(chosen){
       this.route.moveTo(chosen.x*T,chosen.y*T);for(const p of chosen.path)this.route.lineTo(p.x*T,p.y*T);
       this.route.stroke({width:1.5/this.camera.zoom,color:0xe4c779,alpha:.8});
-      const b=this.world.buildings[chosen.destination];this.route.rect(b.door.x*T,b.door.y*T,T,T).stroke({width:1.5/this.camera.zoom,color:0xe4c779});
+      if(chosen.path.length){const p=chosen.path[chosen.path.length-1];this.route.rect((Math.floor(p.x))*T,(Math.floor(p.y))*T,T,T).stroke({width:1.5/this.camera.zoom,color:0xe4c779});}
       this.selection.ellipse(chosen.x*T,chosen.y*T-1,9,4).stroke({width:2/this.camera.zoom,color:0xe4c779});
     }
     for(const c of this.world.citizens){const s=this.sprites[c.id];s.position.set(Math.round(c.x*T),Math.round(c.y*T));s.zIndex=c.y;s.texture=this.textures[c.id][c.path.length?Math.floor(this.world.seconds*2+c.id)%2:0];}

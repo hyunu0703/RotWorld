@@ -1,6 +1,9 @@
 import { CONFIG } from '../data/config.ts';
 import type { CharacterDraft } from '../data/character.ts';
-import { personalitySummary } from '../data/character.ts';
+import { defaultDraft, personalitySummary } from '../data/character.ts';
+import { createBrain, type Brain, type DangerMemory } from '../ai/types.ts';
+import { updateAI } from '../ai/decision.ts';
+import { observe } from '../ai/perception.ts';
 import { initialStock, stock, type Stock, type Activity } from '../data/survival.ts';
 import { advanceSurvival, totalSupplies } from './survival.ts';
 export interface Point { x: number; y: number }
@@ -11,8 +14,9 @@ export interface Citizen extends Point {
   path: Point[]; destination: number; wait: number; visits: number; reason: string; action: string;
   character?:CharacterDraft;
   supplies:Stock;activity:Activity;
+  brain:Brain;actionSource:'ai'|'player'|'system';
 }
-export interface World { seconds: number; tick: number; citizens: Citizen[]; buildings: Building[]; events: { time: number; text: string }[]; mainCharacterId:number|null;runId:string;active:boolean;consumed:Stock;initialSupplies:Stock }
+export interface World { seconds: number; tick: number; citizens: Citizen[]; buildings: Building[]; events: { time: number; text: string }[]; mainCharacterId:number|null;runId:string;active:boolean;consumed:Stock;initialSupplies:Stock;dangers:Omit<DangerMemory,'seenAt'>[] }
 const definitions: [string,string,number,number,number,number,string][] = [
   ['해솔 101동','주거',7,6,14,12,'#777e72'],['해솔 102동','주거',7,30,14,11,'#858075'],
   ['한빛 주택','주거',7,54,14,10,'#92776a'],['모퉁이 편의점','상점',36,7,15,10,'#698d88'],
@@ -26,7 +30,7 @@ export function walkable(p: Point, buildings: Building[]) {
   return Number.isInteger(p.x)&&Number.isInteger(p.y)&&p.x>=2&&p.y>=2&&p.x<CONFIG.width-2&&p.y<CONFIG.height-2
     && !buildings.some(b=>p.x>=b.x&&p.x<b.x+b.w&&p.y>=b.y&&p.y<b.y+b.h);
 }
-export function findPath(start: Point, goal: Point, buildings: Building[]): Point[] | null {
+export function findPath(start: Point, goal: Point, buildings: Building[],allowed:(p:Point)=>boolean=()=>true): Point[] | null {
   const from={x:Math.floor(start.x),y:Math.floor(start.y)}, to={x:Math.floor(goal.x),y:Math.floor(goal.y)};
   if(!walkable(from,buildings)||!walkable(to,buildings)) return null;
   const key=(p:Point)=>p.y*CONFIG.width+p.x, first=key(from), last=key(to);
@@ -35,7 +39,7 @@ export function findPath(start: Point, goal: Point, buildings: Building[]): Poin
     const p=queue[i], k=key(p); if(k===last) break;
     for(const [dx,dy] of [[1,0],[0,1],[-1,0],[0,-1]]) {
       const next={x:p.x+dx,y:p.y+dy}, n=key(next);
-      if(walkable(next,buildings)&&!prev.has(n)){prev.set(n,k);queue.push(next);}
+      if(walkable(next,buildings)&&allowed({x:next.x+.5,y:next.y+.5})&&!prev.has(n)){prev.set(n,k);queue.push(next);}
     }
   }
   if(!prev.has(last))return null;
@@ -55,23 +59,25 @@ export function createWorld(profile?:CharacterDraft):World {
   const buildings=createBuildings();
   const names=['이서윤','김도현','박지우','최민준','정하린','강시우','윤서진','장유진','임수호','한채원','오지안','신태오'];
   const jobs=['간호사','정비사','학생','회사원','요리사','배달원'];
-  const world:World={seconds:0,tick:0,citizens:[],buildings,events:[],mainCharacterId:profile?0:null,runId:'',active:true,consumed:stock(),initialSupplies:stock()};
+  const world:World={seconds:0,tick:0,citizens:[],buildings,events:[],mainCharacterId:profile?0:null,runId:'',active:true,consumed:stock(),initialSupplies:stock(),dangers:[]};
   for(let id=0;id<CONFIG.population;id++) {
     const b=buildings[id%buildings.length];
     const c:Citizen={id,name:names[id],age:22+id*3,job:jobs[id%6],home:buildings[[0,1,2,11][id%4]].name,
       money:15000+id*2300,personality:['신중한 편','활동적인 편','차분한 편'][id%3],inventory:['개인 가방'],
-      hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:'',supplies:stock(1,0,1),activity:{kind:'tour'}};
+      hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:'',supplies:stock(1,0,1),activity:{kind:'idle'},brain:createBrain(id,!(id===0&&profile)),actionSource:'system'};
+    const npc=defaultDraft();npc.name=c.name;npc.personality.risk=(['low','normal','high'] as const)[id%3];npc.personality.stockpiling=(['low','normal','high'] as const)[Math.floor(id/3)%3];c.character=npc;c.personality=personalitySummary(npc);
     if(id===0&&profile){c.name=profile.name;c.character=structuredClone(profile);c.personality=personalitySummary(profile);}
-    world.citizens.push(c);chooseDestination(world,c);
+    world.citizens.push(c);c.action='주변 관찰';c.reason='직접 관찰한 장소와 개인별 욕구를 바탕으로 다음 행동을 판단합니다.';observe(world,c);
   }
-  if(profile){const main=world.citizens[0];main.activity={kind:'idle'};main.path=[];main.destination=0;main.action='행동 지시 대기';main.reason='아래 생존 행동에서 장소와 행동을 선택해 주세요. 자율 생존 AI는 다음 단계에서 연결됩니다.';}
+  if(profile){const main=world.citizens[0];main.activity={kind:'idle'};main.path=[];main.destination=0;main.action='행동 지시 대기';main.reason='생존 행동을 직접 지시하거나 자율 생존을 켤 수 있습니다.';}
   world.initialSupplies=totalSupplies(world);
-  record(world,'관찰 시작 · 인간 12명의 이동 경로를 준비했습니다.');return world;
+  record(world,'관찰 시작 · NPC의 개인별 인지·자율 생존을 준비했습니다.');return world;
 }
 export function stepWorld(world:World,seconds:number) {
   if(!world.active||!Number.isFinite(seconds)||seconds<=0)return;
   world.seconds+=seconds;world.tick++;
   for(const c of world.citizens) {
+    updateAI(world,c);
     const before=[c.hunger,c.thirst,c.fatigue];advanceSurvival(world,c,seconds);
     for(const [i,value] of [c.hunger,c.thirst,c.fatigue].entries())if(before[i]<100&&value>=100)record(world,`${c.name}: ${['허기','갈증','피로'][i]} 한계 경고${i<2?' · 지속 피해는 아직 미구현':''}`);
   }
