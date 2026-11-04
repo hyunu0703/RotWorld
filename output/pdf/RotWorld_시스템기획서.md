@@ -29,6 +29,54 @@ RotWorld는 좀비 사태가 시작된 현대 도시를 배경으로 하는 생�
 
 주요 키워드: 자율 생존 · 인간 빙의 · 한정된 물자 · 소음 · 감염 · 학습
 
+## 참고 게임과 적용 방향
+
+그래픽은 WorldBox / 핵심 시스템은 좀보이드·인조이·심즈
+
+### WorldBox | 전체적인 그래픽
+
+세계를 만들고 생명체와 문명의 변화를 관찰하는 신 시뮬레이션 게임이다.
+
+참고 요소: 작은 캐릭터와 조밀한 지형, 위에서 내려다보는 픽셀 아트 표현을 참고한다. RotWorld는 이를 현대 도시·건물·생존자에 맞춰 표현한다.
+
+[나무위키: WorldBox - God Simulator](https://namu.wiki/w/WorldBox%20-%20God%20Simulator) · [YouTube 플레이 영상](https://www.youtube.com/watch?v=nslwwJQgJjY)
+
+Nookrium · World Box 플레이
+
+### 프로젝트 좀보이드 | 핵심 시스템: 캐릭터 설정·생존의 무게
+
+좀비 사태 속에서 물자를 찾고 위험을 피하며 살아남는 생존 시뮬레이션 게임이다.
+
+참고 요소: 시작 전 캐릭터를 설정하는 과정과 사망이 주는 긴장감을 참고한다. 메인 캐릭터 사망 시 회차 전체를 초기화하는 것은 RotWorld의 규칙이다.
+
+[나무위키: Project Zomboid](https://namu.wiki/w/Project%20Zomboid) · [YouTube 플레이 영상](https://www.youtube.com/watch?v=ZCQg0Aa_OtU)
+
+Hardcore Zombie Survival Simulator · Part 01
+
+### 인조이(inZOI) | 핵심 시스템: 세계 관찰·인물 개입
+
+인물의 삶을 관찰하고 세계와 인물의 일상에 개입하는 인생 시뮬레이션 게임이다.
+
+참고 요소: 도시를 관찰하다 특정 인물의 삶에 들어가 선택하는 경험을 참고한다. RotWorld에서는 인간 빙의와 직접적인 생존 행동 선택으로 연결한다.
+
+[나무위키: 인조이](https://namu.wiki/w/%EC%9D%B8%EC%A1%B0%EC%9D%B4) · [YouTube 플레이 영상](https://www.youtube.com/watch?v=Igakmd3kwLs)
+
+공식 채널 · 2023 Gameplay Demo
+
+### 심즈(The Sims) | 핵심 시스템: 욕구·성격·행동 선택
+
+욕구와 성격을 가진 인물의 생활을 관찰하고 행동을 지시하는 인생 시뮬레이션 시리즈다.
+
+참고 요소: 인물별 상태와 성향을 살피고 행동을 선택하는 경험을 참고한다. RotWorld에서는 일상생활 대신 안전·물자 확보 중심의 생존 판단으로 구성한다.
+
+[나무위키: 심즈 시리즈](https://namu.wiki/w/%EC%8B%AC%EC%A6%88%20%EC%8B%9C%EB%A6%AC%EC%A6%88) · [YouTube 플레이 영상](https://www.youtube.com/watch?v=Yg68IRQU3wg)
+
+ZackScottGames · The Sims 4 플레이 1편
+
+### RotWorld의 결합 방향
+
+픽셀 아트 도시 위에서 인간이 자율적으로 생존하고, 플레이어는 세계를 관찰·변경하거나 한 인간에 빙의해 선택한다. 참고 게임의 그래픽 자산이나 세부 규칙을 그대로 사용하는 것은 아니다.
+
 ## 2. 플레이 방식과 회차
 
 도시를 바꾸는 권한과 한 인물의 생존
