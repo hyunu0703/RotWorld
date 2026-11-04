@@ -24,6 +24,7 @@ export class Scene {
   pan(dx:number,dy:number){this.follow=false;this.camera.x-=dx/this.camera.zoom;this.camera.y-=dy/this.camera.zoom;this.clamp();}
   focus(id:number){const c=this.world.citizens[id];this.camera.x=c.x*CONFIG.tile;this.camera.y=c.y*CONFIG.tile;this.camera.zoom=Math.max(this.camera.zoom,1.5);this.clamp();}
   pick(p:Point){const w=this.toWorld(p);let best:number|null=null,d=Math.max(10,13/this.camera.zoom);for(const c of this.world.citizens){const dist=Math.hypot(c.x*CONFIG.tile-w.x,c.y*CONFIG.tile-6-w.y);if(dist<d){best=c.id;d=dist;}}return best;}
+  pickBuilding(p:Point){const w=this.toWorld(p),T=CONFIG.tile;return this.world.buildings.find(b=>w.x>=b.x*T&&w.x<(b.x+b.w)*T&&w.y>=b.y*T&&w.y<(b.y+b.h)*T)?.id??null;}
   draw(){
     const T=CONFIG.tile,chosen=this.selected===null?null:this.world.citizens[this.selected];
     if(this.follow&&chosen){this.camera.x=chosen.x*T;this.camera.y=chosen.y*T;}

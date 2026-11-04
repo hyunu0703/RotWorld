@@ -1,5 +1,6 @@
 import './style.css';
 import './creation.css';
+import './survival.css';
 import type { World } from './simulation/world.ts';
 import { GameSession } from './simulation/session.ts';
 import { mountCreation } from './ui/creation.ts';
@@ -29,7 +30,7 @@ async function start(world:World){
     if(pointers.size===2){const[a,b]=[...pointers.values()],d=Math.hypot(a.x-b.x,a.y-b.y);if(pinchDistance>0)scene.zoom(d/pinchDistance,{x:(a.x+b.x)/2,y:(a.y+b.y)/2});pinchDistance=d;moved=true;}
     else if(moved||Math.hypot(p.x-down.x,p.y-down.y)>4){moved=true;scene.pan(p.x-previous.x,p.y-previous.y);}
   });
-  canvas.addEventListener('pointerup',e=>{if(!moved&&pointers.size===1)ui.select(scene.pick(point(e)));pointers.delete(e.pointerId);if(pointers.size===1)moved=true;pinchDistance=0;});
+  canvas.addEventListener('pointerup',e=>{if(!moved&&pointers.size===1){const p=point(e),human=scene.pick(p),building=scene.pickBuilding(p);if(human!==null)ui.select(human);else if(building!==null)ui.selectBuilding(building);else ui.select(null);}pointers.delete(e.pointerId);if(pointers.size===1)moved=true;pinchDistance=0;});
   canvas.addEventListener('pointercancel',e=>{pointers.delete(e.pointerId);moved=true;pinchDistance=0;});
   canvas.addEventListener('wheel',e=>{e.preventDefault();scene.zoom(Math.exp(-e.deltaY*.0015),point(e));},{passive:false});
   const keys=new Set<string>();
