@@ -41,7 +41,7 @@ export const LEVEL_LABELS:Record<Level,string>={low:'낮음',normal:'보통',hig
 export function personalitySummary(d:CharacterDraft){return PERSONALITIES.map(p=>`${p.name} ${LEVEL_LABELS[d.personality[p.id]]}`).join(' · ');}
 export function traitSummary(d:CharacterDraft){return d.traits.map(id=>TRAITS.find(t=>t.id===id)!.name).join(' · ')||'없음';}
 export function traitEffectStatus(id:TraitId){
-  return ['quiet','loud','organized','clumsy','smallEater','bigEater','lightSleeper','heavySleeper'].includes(id)?'생존 행동에 적용됨':`효과는 ${TRAITS.find(t=>t.id===id)!.requires} 연결 후 적용`;
+  return ['quiet','loud','organized','clumsy','smallEater','bigEater','lightSleeper','heavySleeper','fastHealing','slowHealing'].includes(id)?'생존 행동에 적용됨':`효과는 ${TRAITS.find(t=>t.id===id)!.requires} 연결 후 적용`;
 }
 export function defaultDraft():CharacterDraft {return {name:'이서윤',stats:Object.fromEntries(STATS.map(s=>[s.id,5])) as CharacterDraft['stats'],personality:Object.fromEntries(PERSONALITIES.map(p=>[p.id,'normal'])) as CharacterDraft['personality'],traits:[]};}
 export function statPoints(stats:CharacterDraft['stats']) {

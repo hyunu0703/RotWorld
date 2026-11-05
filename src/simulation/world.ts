@@ -1,3 +1,4 @@
+import { createFighter,alive,livingZombies,advanceInfection,observeSymptoms,resolveStrikes,beginHumanStrike,beginZombieStrikes,type Fighter } from './combat.ts';
 import { contactFraction } from './contact.ts';
 import { createThreat,advanceHumanThreat,type HumanThreat } from '../ai/threat.ts';
 import { advanceZombies,spawnZombies,type Zombie } from './zombies.ts';
@@ -20,9 +21,9 @@ export interface Citizen extends Point {
   character?:CharacterDraft;
   supplies:Stock;activity:Activity;
   vitals:Vitals;
-  threat:HumanThreat;walkNoiseTime:number;brain:Brain;actionSource:'ai'|'player'|'system';
+  fighter:Fighter;threat:HumanThreat;walkNoiseTime:number;brain:Brain;actionSource:'ai'|'player'|'system';
 }
-export interface World { stageSix:boolean;zombies:Zombie[];noises:Noise[];nextNoise:number;randomState:number;threatAccumulator:number;seconds: number; tick: number; citizens: Citizen[]; buildings: Building[]; events: { time: number; text: string }[]; mainCharacterId:number|null;runId:string;active:boolean;consumed:Stock;initialSupplies:Stock;dangers:Omit<DangerMemory,'seenAt'>[] }
+export interface World { stageSeven:boolean;endReason:string;stageSix:boolean;zombies:Zombie[];noises:Noise[];nextNoise:number;randomState:number;threatAccumulator:number;seconds: number; tick: number; citizens: Citizen[]; buildings: Building[]; events: { time: number; text: string }[]; mainCharacterId:number|null;runId:string;active:boolean;consumed:Stock;initialSupplies:Stock;dangers:Omit<DangerMemory,'seenAt'>[] }
 const definitions: [string,string,number,number,number,number,string][] = [
   ['해솔 101동','주거',7,6,14,12,'#777e72'],['해솔 102동','주거',7,30,14,11,'#858075'],
   ['한빛 주택','주거',7,54,14,10,'#92776a'],['모퉁이 편의점','상점',36,7,15,10,'#698d88'],
@@ -31,7 +32,7 @@ const definitions: [string,string,number,number,number,number,string][] = [
   ['동부 공장','공장',70,7,18,10,'#8c8276'],['정비 창고','공장',72,55,15,9,'#7e8b89'],
   ['작은 의원','의료',71,32,8,9,'#a29b84'],['푸른 주택','주거',83,32,7,9,'#82917e']
 ];
-export function createBuildings(): Building[] { return definitions.map(([name,kind,x,y,w,h,color],id)=>({id,name,kind,x,y,w,h,color,door:{x:x+Math.floor(w/2),y:y+h},stock:initialStock(kind),sleepSpot:[0,1,11].includes(id)})); }
+export function createBuildings(): Building[] { return definitions.map(([name,kind,x,y,w,h,color],id)=>({id,name,kind,x,y,w,h,color,door:{x:x+Math.floor(w/2),y:y+h},stock:{...initialStock(kind),bandage:kind==='의료'?6:kind==='주거'?1:0,pipe:[8,9].includes(id)?2:0},sleepSpot:[0,1,11].includes(id)})); }
 export function walkable(p: Point, buildings: Building[]) {
   return Number.isInteger(p.x)&&Number.isInteger(p.y)&&p.x>=2&&p.y>=2&&p.x<CONFIG.width-2&&p.y<CONFIG.height-2
     && !buildings.some(b=>p.x>=b.x&&p.x<b.x+b.w&&p.y>=b.y&&p.y<b.y+b.h);
@@ -61,16 +62,16 @@ export function chooseDestination(world:World,c:Citizen) {
   c.action=path?`${b.name} 입구로 이동`:'경로 없음 · 대기';
   if(!path){c.wait=10;record(world,`${c.name}: 경로를 찾지 못했습니다.`);}
 }
-export function createWorld(profile?:CharacterDraft,options:{stageSix?:boolean;seed?:number}={}):World {
+export function createWorld(profile?:CharacterDraft,options:{stageSix?:boolean;stageSeven?:boolean;seed?:number}={}):World {
   const buildings=createBuildings();
   const names=['이서윤','김도현','박지우','최민준','정하린','강시우','윤서진','장유진','임수호','한채원','오지안','신태오'];
   const jobs=['간호사','정비사','학생','회사원','요리사','배달원'];
-  const world:World={stageSix:options.stageSix??true,zombies:[],noises:[],nextNoise:0,randomState:options.seed??60703,threatAccumulator:0,seconds:0,tick:0,citizens:[],buildings,events:[],mainCharacterId:profile?0:null,runId:'',active:true,consumed:stock(),initialSupplies:stock(),dangers:[]};
+  const world:World={stageSeven:options.stageSeven??(options.stageSix!==false),endReason:'',stageSix:options.stageSix??true,zombies:[],noises:[],nextNoise:0,randomState:options.seed??60703,threatAccumulator:0,seconds:0,tick:0,citizens:[],buildings,events:[],mainCharacterId:profile?0:null,runId:'',active:true,consumed:stock(),initialSupplies:stock(),dangers:[]};
   for(let id=0;id<CONFIG.population;id++) {
     const b=buildings[id%buildings.length];
     const c:Citizen={id,name:names[id],age:22+id*3,job:jobs[id%6],home:buildings[[0,1,2,11][id%4]].name,
       money:15000+id*2300,personality:['신중한 편','활동적인 편','차분한 편'][id%3],inventory:['개인 가방'],
-      hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:'',supplies:stock(1,0,1),activity:{kind:'idle'},vitals:createVitals(),threat:createThreat(),walkNoiseTime:0,brain:createBrain(id,!(id===0&&profile)),actionSource:'system'};
+      hunger:20,thirst:15,fatigue:10,fear:10,x:b.door.x+.5,y:b.door.y+.5,path:[],destination:id,wait:0,visits:0,reason:'',action:'',supplies:stock(1,0,1),activity:{kind:'idle'},vitals:createVitals(),fighter:createFighter(),threat:createThreat(),walkNoiseTime:0,brain:createBrain(id,!(id===0&&profile)),actionSource:'system'};
     const npc=defaultDraft();npc.name=c.name;npc.personality.risk=(['low','normal','high'] as const)[id%3];npc.personality.stockpiling=(['low','normal','high'] as const)[Math.floor(id/3)%3];c.character=npc;c.personality=personalitySummary(npc);
     if(id===0&&profile){c.name=profile.name;c.character=structuredClone(profile);c.personality=personalitySummary(profile);}
     c.vitals=createVitals(c.character.stats.endurance);
@@ -83,29 +84,36 @@ export function createWorld(profile?:CharacterDraft,options:{stageSix?:boolean;s
 }
 export function stepWorld(world:World,seconds:number) {
   if(!world.active||!Number.isFinite(seconds)||seconds<=0)return;
-  if(world.stageSix){
+  if(world.stageSix||world.stageSeven){
     world.threatAccumulator+=seconds;
-    while(world.threatAccumulator>=.1-1e-8){world.threatAccumulator-=.1;if(Math.abs(world.threatAccumulator)<1e-8)world.threatAccumulator=0;stepSlice(world,.1);}
+    while(world.active&&world.threatAccumulator>=.1-1e-8){world.threatAccumulator-=.1;if(Math.abs(world.threatAccumulator)<1e-8)world.threatAccumulator=0;stepSlice(world,.1);}
   }else stepSlice(world,seconds);
 }
 function stepSlice(world:World,seconds:number){
   world.seconds=Number((world.seconds+seconds).toFixed(8));world.tick++;
+  if(world.stageSeven){advanceInfection(world);if(!world.active)return;}
   if(world.stageSix){world.noises=world.noises.filter(n=>world.seconds-n.time<10);advanceZombies(world,seconds);}
+  if(world.stageSeven)beginZombieStrikes(world);
   for(const c of world.citizens) {
+    if(!alive(c))continue;
+    if(world.stageSeven)observeSymptoms(world,c);
     if(world.stageSix)advanceHumanThreat(world,c,seconds);
     updateAI(world,c);
+    if(world.stageSeven)beginHumanStrike(world,c);
     const before=[c.hunger,c.thirst,c.fatigue];advanceSurvival(world,c,seconds);
+    if(!world.active)return;
     for(const alert of c.vitals.pendingAlerts.splice(0))record(world,`${c.name}: ${alert}`);
-    for(const [i,value] of [c.hunger,c.thirst,c.fatigue].entries())if(before[i]<100&&value>=100)record(world,`${c.name}: ${['허기','갈증','피로'][i]} 한계 경고${i<2?' · 지속 피해는 아직 미구현':''}`);
+    for(const [i,value] of [c.hunger,c.thirst,c.fatigue].entries())if(before[i]<100&&value>=100)record(world,`${c.name}: ${['허기','갈증','피로'][i]} 한계 경고${i<2?' · 지속 피해 발생':''}`);
   }
+  if(world.stageSeven)resolveStrikes(world);
 }
 export function stepTour(world:World,c:Citizen,seconds:number){
     if(c.wait>0){c.wait=Math.max(0,c.wait-seconds);if(c.wait===0)chooseDestination(world,c);return;}
     let budget=CONFIG.walkTilesPerGameSecond*seconds;
     while(c.path.length&&budget>0) {
       const p=c.path[0],dx=p.x-c.x,dy=p.y-c.y,dist=Math.hypot(dx,dy);
-      if(dist<=budget){const fraction=world.stageSix?contactFraction(c,p,world.zombies):1;c.x+=dx*fraction;c.y+=dy*fraction;if(fraction<1)break;c.path.shift();budget-=dist;}
-      else{const to={x:c.x+dx/dist*budget,y:c.y+dy/dist*budget},fraction=world.stageSix?contactFraction(c,to,world.zombies):1;c.x+=(to.x-c.x)*fraction;c.y+=(to.y-c.y)*fraction;budget=0;}
+      if(dist<=budget){const fraction=world.stageSix?contactFraction(c,p,livingZombies(world)):1;c.x+=dx*fraction;c.y+=dy*fraction;if(fraction<1)break;c.path.shift();budget-=dist;}
+      else{const to={x:c.x+dx/dist*budget,y:c.y+dy/dist*budget},fraction=world.stageSix?contactFraction(c,to,livingZombies(world)):1;c.x+=(to.x-c.x)*fraction;c.y+=(to.y-c.y)*fraction;budget=0;}
     }
     if(!c.path.length){c.wait=12+c.id%4*3;c.visits++;c.action=`${world.buildings[c.destination].name} 입구에서 대기`;
       c.reason='목적지에 도착했습니다. 잠시 대기한 뒤 다음 입구로 이동합니다. 실내 진입·탐색은 아직 없습니다.';

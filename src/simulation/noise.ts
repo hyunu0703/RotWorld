@@ -1,7 +1,7 @@
 import { walkable, type World, type Point, type Citizen } from './world.ts';
 import { CONFIG } from '../data/config.ts';
 import { THREAT } from '../data/threat.ts';
-export interface Noise extends Point {id:number;source:string;kind:'walk'|'handling'|'consume';time:number;range:number;distances:Record<string,number>}
+export interface Noise extends Point {id:number;source:string;kind:'walk'|'handling'|'consume'|'punch'|'push'|'pipe';time:number;range:number;distances:Record<string,number>}
 export const tileKey=(p:Point)=>`${Math.floor(p.x)},${Math.floor(p.y)}`;
 // Four-neighbour shortest walking distance. Cached per event, never a ray through walls.
 export function distanceField(world:World,origin:Point,limit:number){
@@ -21,7 +21,7 @@ export function emitNoise(world:World,c:Citizen,kind:Noise['kind'],position:Poin
   if(!world.stageSix)return;
   const multiplier=kind==='walk'?(c.character?.traits.includes('quiet')?.75:c.character?.traits.includes('loud')?1.2:1):1;
   const event:Noise={id:world.nextNoise++,source:`human:${c.id}:${kind}`,kind,x:position.x,y:position.y,time,
-    range:({walk:4,handling:8,consume:2}[kind])*multiplier,distances:distanceField(world,position,THREAT.hearing)};
+    range:({walk:4,handling:8,consume:2,punch:6,push:6,pipe:10}[kind])*multiplier,distances:distanceField(world,position,THREAT.hearing)};
   world.noises.push(event);
 }
 export function heardDistance(noise:Noise,p:Point,sensitivity=1){

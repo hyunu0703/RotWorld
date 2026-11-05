@@ -41,8 +41,8 @@ export class Scene {
       if(chosen.path.length){const p=chosen.path[chosen.path.length-1];this.route.rect((Math.floor(p.x))*T,(Math.floor(p.y))*T,T,T).stroke({width:1.5/this.camera.zoom,color:0xe4c779});}
       this.selection.ellipse(chosen.x*T,chosen.y*T-1,9,4).stroke({width:2/this.camera.zoom,color:0xe4c779});
     }
-    for(const c of this.world.citizens){const s=this.sprites[c.id];s.position.set(Math.round(c.x*T),Math.round(c.y*T));s.zIndex=c.y;s.texture=this.textures[c.id][c.path.length?Math.floor(this.world.seconds*2+c.id)%2:0];}
-    for(const z of this.world.zombies){const s=this.zombieSprites[z.id];s.position.set(Math.round(z.x*T),Math.round(z.y*T));s.zIndex=z.y;s.texture=this.zombieFrames[z.path.length&&!z.contact.length?Math.floor(this.world.seconds*2+z.id)%2:0];}
+    for(const c of this.world.citizens){const s=this.sprites[c.id];s.visible=!c.fighter.converted;s.alpha=c.vitals.dead?.45:1;s.rotation=c.vitals.dead?-Math.PI/2:0;s.position.set(Math.round(c.x*T),Math.round(c.y*T));s.zIndex=c.y;s.texture=this.textures[c.id][c.path.length?Math.floor(this.world.seconds*2+c.id)%2:0];}
+    for(const z of this.world.zombies){let s=this.zombieSprites[z.id];if(!s){s=new Sprite(this.zombieFrames[0]);s.anchor.set(.5,1);this.people.addChild(s);this.zombieSprites[z.id]=s;}s.alpha=z.dead?.35:1;s.rotation=z.dead?-Math.PI/2:0;s.position.set(Math.round(z.x*T),Math.round(z.y*T));s.zIndex=z.y;s.texture=this.zombieFrames[z.path.length&&!z.contact.length?Math.floor(this.world.seconds*2+z.id)%2:0];}
     this.people.sortableChildren=true;
   }
   destroy(){this.resizeObserver?.disconnect();this.app.destroy(true,{children:true,texture:true,textureSource:true});}

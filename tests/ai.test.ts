@@ -153,7 +153,7 @@ test('회차·개인 기억과 과거 판단 스냅샷은 독립',()=>{
 
 test('자율 생존 하루 동안 모든 물자 보존·상태 범위·실제 행동 완료',()=>{
   const w=createWorld();for(let t=0;t<86400;t+=5)stepWorld(w,5);
-  for(const i of ITEMS){assert.equal(totalSupplies(w)[i.id]+w.consumed[i.id],w.initialSupplies[i.id]);assert.ok(w.consumed[i.id]>0);}
+  for(const i of ITEMS){assert.equal(totalSupplies(w)[i.id]+w.consumed[i.id],w.initialSupplies[i.id]);if(i.hunger||i.thirst)assert.ok(w.consumed[i.id]>0);}
   for(const c of w.citizens){for(const key of ['hunger','thirst','fatigue'] as const)assert.ok(c[key]>=0&&c[key]<=100);assert.ok(c.visits>0);assert.ok(c.brain.history.length<=8);assert.ok(stockCount(c.supplies)<=SURVIVAL.capacity);}
   assert.ok(w.citizens.some(c=>c.brain.places[0]));
 });

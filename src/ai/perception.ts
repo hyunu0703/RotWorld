@@ -25,7 +25,7 @@ export function observe(world:World,c:Citizen){
     memory.seenAt=world.seconds;
     // 건물 종류나 멀리 보이는 외관으로 재고와 안전을 알아내지 않는다.
     if(atBuilding(c,b)){
-      if(!memory.stock||memory.stock.snack!==b.stock.snack||memory.stock.meal!==b.stock.meal||memory.stock.water!==b.stock.water||memory.sleepSpot!==b.sleepSpot)brain.revision++;
+      if(!memory.stock||memory.stock.snack!==b.stock.snack||memory.stock.meal!==b.stock.meal||memory.stock.water!==b.stock.water||memory.stock.bandage!==b.stock.bandage||memory.stock.pipe!==b.stock.pipe||memory.sleepSpot!==b.sleepSpot)brain.revision++;
       memory.stock={...b.stock};memory.sleepSpot=b.sleepSpot;memory.inspectedAt=world.seconds;
     }
   }

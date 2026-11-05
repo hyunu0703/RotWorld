@@ -22,7 +22,7 @@ export class SurvivalPanel {
     if(force||host.dataset.actor!==String(id)){
       host.dataset.actor=String(id);host.innerHTML=`<h3>생존 행동 <span class="subtle">선택한 인간에게 지시</span></h3><div class="survival-readout"></div>
       <div class="survival-buttons"><button data-survival="rest">앉아서 휴식</button><button data-survival="stop">행동 중단·기상</button><button data-survival="tour">입구 순회 재개</button></div>
-      <h3 class="supply-heading">소지 물자 <span id="capacity"></span></h3><div class="supply-list">${ITEMS.map(i=>`<div><span>${i.name} <b data-inventory="${i.id}"></b></span><button data-survival="consume" data-item="${i.id}">${i.id==='water'?'물 마시기':i.name==='식사'?'식사하기':'간식 먹기'}</button></div>`).join('')}</div>
+      <h3 class="supply-heading">소지 물자 <span id="capacity"></span></h3><div class="supply-list">${ITEMS.map(i=>`<div><span>${i.name} <b data-inventory="${i.id}"></b></span>${i.hunger||i.thirst?`<button data-survival="consume" data-item="${i.id}">${i.id==='water'?'물 마시기':i.name==='식사'?'식사하기':'간식 먹기'}</button>`:''}</div>`).join('')}</div>
       <h3 class="supply-heading">물자·수면 장소</h3><label for="supply-place" class="subtle">실제 장소·재고 (관찰자 정보 / 지도 건물 클릭)</label><select id="supply-place">${this.world.buildings.map(b=>`<option value="${b.id}" ${b.id===this.place?'selected':''}>${esc(b.name)}${b.sleepSpot?' · 수면 거점':''}</option>`).join('')}</select>
       <p id="sleep-place-info" class="subtle"></p><div class="supply-list">${ITEMS.map(i=>`<div><span>${i.name} <b data-stock="${i.id}"></b></span><div><button data-survival="take" data-item="${i.id}">1개 획득</button><button data-survival="deposit" data-item="${i.id}">1개 보관</button></div></div>`).join('')}</div>
       <div class="survival-buttons"><button data-survival="move">이 장소로 이동</button><button data-survival="sleep">거점에서 수면</button></div><p id="survival-feedback" role="status"></p><p class="subtle">획득·보관·수면은 입구에 도착한 뒤 실행합니다. 물자는 자동 보충되지 않습니다. 정지 중에는 행동 시간이 흐르지 않습니다.</p>`;
@@ -42,7 +42,7 @@ export function survivalDescription(c:Citizen){
 }
 export function survivalWarning(c:Citizen){
   const notes:string[]=[];
-  if(c.hunger>=100)notes.push('굶주림 경고 — 음식이 필요합니다. 지속 피해는 후속 단계입니다.');
+  if(c.hunger>=100)notes.push('굶주림 경고 — 음식이 필요합니다. 신체가 악화됩니다.');
   else if(c.hunger>=60)notes.push('식량 확보가 필요합니다.');
   if(c.thirst>=100)notes.push('탈수 경고 — 물이 필요합니다. 지속 피해는 후속 단계입니다.');
   else if(c.thirst>=60)notes.push('수분 섭취가 필요합니다.');

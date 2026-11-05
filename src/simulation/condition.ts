@@ -1,12 +1,12 @@
 import type { Citizen } from './world.ts';
 
 // 2026-11-04 승인된 초기 기준. 플레이어에게 이 내부 수치를 노출하지 않는다.
-export const CONDITION = {health:100,stamina:100,walk:-1,handling:-2,idle:6,rest:12,sleep:18} as const;
+export const CONDITION = {health:100,stamina:100,walk:-1,handling:-2,idle:6,combat:6,rest:12,sleep:18} as const;
 export interface Vitals {
   health:number;maxHealth:number;stamina:number;maxStamina:number;
   healthStage:number;staminaStage:number;dead:boolean;pendingAlerts:string[];recentAlerts:string[];
 }
-export type BodyMode='walk'|'handling'|'idle'|'rest'|'sleep';
+export type BodyMode='walk'|'handling'|'idle'|'rest'|'sleep'|'combat';
 const healthLabels=['양호','경미한 손상','상당한 손상','위중','사망'];
 const staminaLabels=['여유 있음','숨이 차오름','숨이 가쁨','기진맥진','힘이 바닥남'];
 export function createVitals(endurance=5):Vitals {
@@ -23,7 +23,7 @@ export function recoveryPenalty(c:Citizen){
 }
 export function bodyMode(c:Citizen):BodyMode {
   const kind=c.activity.kind;
-  return kind==='sleep'?'sleep':kind==='rest'?'rest':kind==='handling'?'handling':
+  return kind==='combat'?'combat':kind==='sleep'?'sleep':kind==='rest'?'rest':kind==='handling'?'handling':
     (kind==='travel'||kind==='explore'||kind==='tour')&&c.path.length>0&&c.wait<=0?'walk':'idle';
 }
 export function staminaRate(c:Citizen,mode:BodyMode=bodyMode(c)){
@@ -62,6 +62,6 @@ export function advanceCondition(c:Citizen,seconds:number,mode:BodyMode,fatigue=
 export function conditionText(c:Citizen,paused=false){
   const v=c.vitals,rate=staminaRate(c);
   const movement=rate<0&&v.stamina>0?'소모 중':rate>0&&v.stamina<v.maxStamina?'회복 중':'유지 중';
-  return {health:healthLabels[v.healthStage]+(v.healthStage===4?'':paused?' · 진행 중단':' · 안정됨'),
+  return {health:healthLabels[v.healthStage]+(v.healthStage===4?'':paused?' · 진행 중단':c.fighter.healthRate<0?' · 악화 중':c.fighter.healthRate>0&&v.health<v.maxHealth?' · 회복 중':' · 안정됨'),
     stamina:staminaLabels[v.staminaStage]+(paused?' · 진행 중단':` · ${movement}`)};
 }

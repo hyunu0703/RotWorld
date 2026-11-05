@@ -1,3 +1,4 @@
+import { combatAI } from '../simulation/combat.ts';
 import { canSee,riskAt } from './perception.ts';
 import { findPath,walkable,record,type World,type Citizen,type Point } from '../simulation/world.ts';
 import { heardDistance,tileKey } from '../simulation/noise.ts';
@@ -12,6 +13,7 @@ export function createThreat():HumanThreat{return {memories:{},visible:[],observ
 export function observeThreats(world:World,c:Citizen){
   const t=c.threat,sight=8*(1+((c.character?.stats.perception??5)-5)*.04),oldVisible=t.visible.join(',');t.visible=[];
   for(const z of world.zombies){
+    if(z.dead)continue;
     const distance=Math.hypot(z.x-c.x,z.y-c.y);
     if(distance>sight||!canSee(world,c,z))continue;
     const previous=t.memories[z.id];
@@ -21,7 +23,7 @@ export function observeThreats(world:World,c:Citizen){
     t.memories[z.id]={id:z.id,x:z.x,y:z.y,seenAt:world.seconds,distance,approaching};t.visible.push(z.id);
   }
   // Only personally visible walking tiles can become cover/escape candidates.
-  for(let dy=-8;dy<=8;dy+=2)for(let dx=-8;dx<=8;dx+=2){
+  for(let dy=-8;dy<=8;dy++)for(let dx=-8;dx<=8;dx++){
     const p={x:Math.floor(c.x)+dx+.5,y:Math.floor(c.y)+dy+.5};
     if(Math.hypot(p.x-c.x,p.y-c.y)<=sight&&walkable({x:Math.floor(p.x),y:Math.floor(p.y)},world.buildings)&&canSee(world,c,p))t.observed[tileKey(p)]=p;
   }
@@ -41,6 +43,7 @@ function logDecision(world:World,c:Citizen,action:string,reason:string,alternati
 }
 export function fearRiskMultiplier(fear:number){return fear>=80?2:fear>=60?1.5:fear>=40?1.25:1;}
 export function respondToThreat(world:World,c:Citizen):boolean{
+  if(combatAI(world,c))return true;
   if(!world.stageSix)return false;
   const t=c.threat,visible=t.visible.map(id=>t.memories[id]),close=visible.filter(m=>Math.hypot(m.x-c.x,m.y-c.y)<=6);
   if(!c.brain.enabled)return false;

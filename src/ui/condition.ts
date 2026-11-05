@@ -6,10 +6,10 @@ import { escapeHTML } from './html.ts';
 export function conditionDetails(c:Citizen,paused=false):string[]{
   const notes:string[]=[];
   if(paused)notes.push('일시정지 — 상태 변화와 행동 진행이 멈췄습니다.');
-  notes.push('신체 상태는 현재 손상 수준입니다. 부상·감염의 유무나 안전을 보장하지 않습니다. 피해·치료·자연 회복은 아직 연결하지 않았습니다.');
+  notes.push('신체 상태는 현재 손상 수준입니다. 부상·감염의 유무나 안전을 보장하지 않습니다. 출혈·굶주림·탈수는 신체를 악화시키며 조건을 만족한 휴식·수면은 회복시킵니다.');
   const mode=bodyMode(c);
   if(paused)notes.push('아래 행동 원인은 재개 시 적용됩니다. 현재는 소모·회복하지 않습니다.');
-  notes.push({walk:'걷기로 활동 여력을 사용합니다.',handling:'물품 취급으로 활동 여력을 사용합니다.',idle:'대기·섭취 중 활동 여력을 회복합니다.',rest:'앉아서 쉬며 활동 여력을 회복합니다. 피로는 줄어들지 않습니다.',sleep:'수면으로 활동 여력과 피로를 회복합니다.'}[mode]);
+  notes.push({combat:'공격 사이에는 기존 대기 회복을 적용하고, 공격 시작 시 활동 여력을 사용합니다.',walk:'걷기로 활동 여력을 사용합니다.',handling:'물품 취급으로 활동 여력을 사용합니다.',idle:'대기·섭취 중 활동 여력을 회복합니다.',rest:'앉아서 쉬며 활동 여력을 회복합니다. 피로는 줄어들지 않습니다.',sleep:'수면으로 활동 여력과 피로를 회복합니다.'}[mode]);
   if(c.vitals.stamina===0)notes.push('힘이 바닥났습니다. 휴식이 필요합니다. 기본 이동·섭취·물품 취급은 계속할 수 있습니다.');
   else if(c.vitals.stamina>=c.vitals.maxStamina)notes.push('현재 감당할 수 있는 활동 여력이 차 있습니다.');
   const endurance=c.character?.stats.endurance??5;

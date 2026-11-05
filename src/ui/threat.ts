@@ -3,7 +3,7 @@ import type { Zombie } from '../simulation/zombies.ts';
 import { escapeHTML as esc } from './html.ts';
 import { timeLabel } from '../simulation/clock.ts';
 export function zombieMarkup(z:Zombie){
-  return `<div class="info-section"><span class="overline">ZOMBIE · ${z.id+1}</span><h2>좀비 ${z.id+1}</h2><h3>${{wander:'배회',search:'수색',chase:'추적'}[z.state]}</h3><p>${esc(z.reason)}</p><p>위치 ${z.x.toFixed(1)}, ${z.y.toFixed(1)}</p><p>목표 위치 ${z.goal?`${z.goal.x.toFixed(1)}, ${z.goal.y.toFixed(1)}`:'없음'}</p><p>마지막 목격 ${z.lastSeen===null?'없음':timeLabel(z.lastSeen)}</p><p>이동 속도 ${z.speed.toFixed(2)}타일/게임 초 · 소음 민감도 ×${z.sensitivity.toFixed(1)}</p><p>기억한 소리 ${z.sound?`${z.sound.position.x.toFixed(1)}, ${z.sound.position.y.toFixed(1)} · 청취 ${timeLabel(z.sound.heardAt)}`:'없음'}</p><p class="subtle">실제 감지 정보입니다. 소리만으로 발생자의 신원·현재 위치를 알지 못합니다. 접촉 시 추가 접근을 멈추며 공격·피해·물림·감염은 구현하지 않았습니다.</p></div>`;
+  return `<div class="info-section"><span class="overline">ZOMBIE · ${z.id+1}</span><h2>좀비 ${z.id+1}</h2><p>${z.dead?'제압됨':'활동 중'}</p><h3>${{wander:'배회',search:'수색',chase:'추적'}[z.state]}</h3><p>${esc(z.reason)}</p><p>위치 ${z.x.toFixed(1)}, ${z.y.toFixed(1)}</p><p>목표 위치 ${z.goal?`${z.goal.x.toFixed(1)}, ${z.goal.y.toFixed(1)}`:'없음'}</p><p>마지막 목격 ${z.lastSeen===null?'없음':timeLabel(z.lastSeen)}</p><p>이동 속도 ${z.speed.toFixed(2)}타일/게임 초 · 소음 민감도 ×${z.sensitivity.toFixed(1)}</p><p>기억한 소리 ${z.sound?`${z.sound.position.x.toFixed(1)}, ${z.sound.position.y.toFixed(1)} · 청취 ${timeLabel(z.sound.heardAt)}`:'없음'}</p><p class="subtle">실제 감지 정보입니다. 소리만으로 발생자의 신원·현재 위치를 알지 못합니다. 접촉 시 추가 이동을 멈추고 공격할 수 있으며 공격 준비와 타격은 게임 시간으로 계산됩니다.</p></div>`;
 }
 export function threatMarkup(world:World,c:Citizen){
   const t=c.threat;

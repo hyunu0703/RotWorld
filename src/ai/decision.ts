@@ -1,3 +1,4 @@
+import { alive } from '../simulation/combat.ts';
 import { respondToThreat,fearRiskMultiplier,sleepThreatNearby } from './threat.ts';
 import { ITEMS, SURVIVAL, stockCount, type ItemId } from '../data/survival.ts';
 import { CONFIG } from '../data/config.ts';
@@ -63,7 +64,7 @@ function needsCandidates(world:World,c:Citizen):Candidate[]{
     const active=brain.needs[goal],preparing=v[goal]>=40;
     if(!active&&!preparing)continue;
     if(goal!=='sleep'){
-      const items=goal==='water'?ITEMS.filter(i=>i.id==='water'):ITEMS.filter(i=>i.id!=='water');
+      const items=goal==='water'?ITEMS.filter(i=>i.id==='water'):ITEMS.filter(i=>i.hunger>0);
       for(const item of items)if(active&&c.supplies[item.id]>0){
         const usefulness=Math.min(v[goal]-targets[goal],item.hunger||item.thirst);
         options.push({command:{kind:'consume',item:item.id},action:`소지한 ${item.name} 섭취`,reason:`${goalNames[goal]} 해결을 시작한 상태이며 현재 ${v[goal].toFixed(1)}, 목표 ${targets[goal]}입니다. 가진 ${item.name} ${c.supplies[item.id]}회분을 먼저 사용하면 이동 없이 욕구를 낮출 수 있습니다.`,goal,key:`use:${item.id}`,score:urgency(c,goal)+30+usefulness*.2-item.useSeconds*.2,distance:0,risk:brain.risk});
@@ -115,6 +116,10 @@ export function think(world:World,c:Citizen){
     const current=brain.goal?v[brain.goal]:0,emergency=preparingRest?(c.hunger>=60||c.thirst>=60||brain.needs.sleep):Math.max(c.hunger,c.thirst)>=90&&current<80;
     if(!empty&&!noBed&&!emergency)return;
   }
+  if(world.stageSeven&&c.supplies.pipe===0&&c.character?.personality.aggression!=='low'&&brain.risk<20&&stockCount(c.supplies)<SURVIVAL.capacity&&Math.max(c.hunger,c.thirst,c.fatigue)<60){
+    const p=Object.values(brain.places).filter(p=>(p.stock?.pipe??0)>0).sort((a,b)=>Math.hypot(c.x-a.x,c.y-a.y)-Math.hypot(c.x-b.x,c.y-b.y))[0];
+    if(p&&dispatch(world,c,[{command:{kind:'take',buildingId:p.id,item:'pipe'},action:p.name+'에서 쇠파이프 확보',reason:'직접 확인한 무기를 하나 확보합니다.',goal:null,key:'pipe:'+p.id,score:40,distance:Math.hypot(c.x-p.x,c.y-p.y),risk:riskAt(brain,p)}]))return;
+  }
   const options=needsCandidates(world,c);
   if(options.length&&dispatch(world,c,options))return;
   if(a.kind==='explore'&&!changed)return;
@@ -133,10 +138,10 @@ export function updateAI(world:World,c:Citizen){
   if(c.brain.enabled&&(world.seconds>=c.brain.nextThink||urgent||c.brain.revision!==c.brain.plannedRevision||c.activity.kind==='idle'&&c.brain.decision?.goal))think(world,c);
 }
 export function setAutonomy(world:World,id:number,enabled:boolean):string{
-  const c=world.citizens.find(c=>c.id===id);if(!world.active||!c)return '인간을 선택해 주세요.';
+  const c=world.citizens.find(c=>c.id===id);if(!world.active||!c||!alive(c))return '인간을 선택해 주세요.';
   c.brain.enabled=enabled;c.brain.goal=null;c.brain.needs={food:false,water:false,sleep:false};c.brain.nextThink=world.seconds;
   c.threat.fleeing=false;c.threat.nextPlan=0;
-  c.path=[];c.wait=0;c.activity={kind:'idle'};c.action=enabled?'자율 생존 시작':'직접 지시 대기';c.actionSource=enabled?'ai':'player';
+  c.fighter.pending=null;c.fighter.retreat=false;c.path=[];c.wait=0;c.activity={kind:'idle'};c.action=enabled?'자율 생존 시작':'직접 지시 대기';c.actionSource=enabled?'ai':'player';
   c.reason=enabled?'이 인간이 직접 관찰한 사실로 다음 행동을 판단합니다.':'플레이어가 자율 행동을 중단했습니다. 다음 지시를 기다립니다.';
   const d:Decision={time:world.seconds,source:'player',action:c.action,reason:c.reason,goal:null,alternatives:[]};
   c.brain.decision=d;c.brain.history.unshift(structuredClone(d));c.brain.history.length=Math.min(8,c.brain.history.length);

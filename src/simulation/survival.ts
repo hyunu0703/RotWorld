@@ -1,3 +1,4 @@
+import { alive,livingZombies,advanceMedical,cancelStrike,symptoms } from './combat.ts';
 import { contactFraction } from './contact.ts';
 import { emitNoise,walkingNoise } from './noise.ts';
 import { sleepThreatNearby } from '../ai/threat.ts';
@@ -12,15 +13,16 @@ export function needRates(c:Citizen,mode:'awake'|'rest'|'sleep'=c.activity.kind=
   const hungerFactor=hasTrait(c,'smallEater')?.85:hasTrait(c,'bigEater')?1.2:1;
   return {hunger:(mode==='sleep'?2:4)*hungerFactor,thirst:mode==='sleep'?3:6,fatigue:mode==='sleep'?-sleepRecovery(c):mode==='rest'?0:4};
 }
-export function changeNeeds(c:Citizen,seconds:number,mode?:'awake'|'rest'|'sleep',body:BodyMode=mode==='sleep'?'sleep':mode==='rest'?'rest':bodyMode(c)){
-  const r=needRates(c,mode);let remaining=seconds;
+export function changeNeeds(c:Citizen,seconds:number,mode?:'awake'|'rest'|'sleep',body:BodyMode=mode==='sleep'?'sleep':mode==='rest'?'rest':bodyMode(c),world?:World){
+  const r=needRates(c,mode);if(world?.stageSeven){if(c.activity.kind==='combat'){r.hunger+=2*(hasTrait(c,'smallEater')?.85:hasTrait(c,'bigEater')?1.2:1);r.thirst+=4;r.fatigue+=3;}if(symptoms(c,world.seconds))r.fatigue+=2;}let remaining=seconds;
   // 회복 보정·최대치 경계에서 나눠 시간 분할에 따른 계산 차이를 막는다.
-  while(remaining>1e-9){
+  while(remaining>1e-9&&alive(c)){
     let duration=remaining;
     for(const key of ['hunger','thirst','fatigue'] as const)for(const boundary of [0,40,60,80,100]){
       const time=(boundary-c[key])/r[key]*3600;if(time>1e-7&&Number.isFinite(time))duration=Math.min(duration,time);
     }
     const intervalFatigue=r.fatigue<0&&(c.fatigue===60||c.fatigue===80)?c.fatigue-1e-8:c.fatigue;
+    if(world)advanceMedical(world,c,duration,body,intervalFatigue);
     c.vitals.pendingAlerts.push(...advanceCondition(c,duration,body,intervalFatigue));
     for(const key of ['hunger','thirst','fatigue'] as const){
       c[key]=cap(c[key]+r[key]*duration/3600);
@@ -70,10 +72,10 @@ function startInteraction(world:World,c:Citizen,intent:Interaction,source=c.acti
 }
 export type SurvivalCommand = Interaction|{kind:'consume';item:ItemId}|{kind:'rest'}|{kind:'stop'}|{kind:'tour'}|{kind:'explore';point:Point};
 export function issueCommand(world:World,id:number,command:SurvivalCommand,options:{source?:'ai'|'player';allowed?:(p:Point)=>boolean}={}):string {
-  const c=world.citizens.find(c=>c.id===id);if(!world.active||!c)return '진행 중인 인간을 선택해 주세요.';
+  const c=world.citizens.find(c=>c.id===id);if(!world.active||!c||!alive(c))return '진행 중인 인간을 선택해 주세요.';
   const source=options.source??'player',prefix=source==='ai'?'자율 행동':'플레이어 지시';
   if(command.kind==='consume'){
-    const item=ITEMS.find(i=>i.id===command.item);if(!item)return '알 수 없는 물품입니다.';
+    const item=ITEMS.find(i=>i.id===command.item);if(!item||!(item.hunger||item.thirst))return '섭취할 수 없는 물품입니다.';
     if(c.supplies[item.id]<1)return `${item.name}을 가지고 있지 않습니다.`;
     if((item.hunger&&c.hunger<=0)||(item.thirst&&c.thirst<=0))return '이미 해당 욕구가 해소되어 있습니다.';
     emitNoise(world,c,'consume');
@@ -98,7 +100,7 @@ export function issueCommand(world:World,id:number,command:SurvivalCommand,optio
     if(atBuilding(c,b)){const error=startInteraction(world,c,command,source);if(error)return error;c.path=[];c.destination=b.id;}
     else{c.path=path;c.wait=0;c.destination=b.id;c.activity={kind:'travel',interaction:{...command}};c.action=`${b.name} 입구로 이동`;c.reason=`${prefix}: 목적지에 도착한 뒤 지정한 행동을 수행합니다.`;}
   }
-  c.actionSource=source;
+  cancelStrike(c);c.actionSource=source;
   if(source==='player'){
     c.brain.enabled=false;c.brain.goal=null;c.threat.fleeing=false;
     const d={time:world.seconds,source:'player' as const,action:c.action,reason:c.reason,goal:null,alternatives:[]};
@@ -111,6 +113,7 @@ function completeHandling(world:World,c:Citizen,a:Extract<Activity,{kind:'handli
   const error=!b||!atBuilding(c,b)?'물품 취급 위치를 벗어났습니다.':transferError(c,b,a.mode,a.item);
   if(error){idle(c,error);c.brain.nextSense=0;record(world,`${c.name}: ${error}`);return;}
   const amount=a.mode==='take'?1:-1;b!.stock[a.item]-=amount;c.supplies[a.item]+=amount;
+  if(c.supplies.pipe===0)c.fighter.equipped=false;
   emitNoise(world,c,'handling');
   c.brain.nextSense=0;
   const text=`${ITEMS.find(i=>i.id===a.item)!.name} 1회분 ${a.mode==='take'?'획득':'보관'} 완료`;
@@ -119,21 +122,34 @@ function completeHandling(world:World,c:Citizen,a:Extract<Activity,{kind:'handli
 export function advanceSurvival(world:World,c:Citizen,seconds:number){
   let remaining=seconds;
   // 행동 완료 시 남은 시간을 다음 상태에 적용한다. 긴 간격에서도 욕구가 이중 증가하지 않는다.
-  while(remaining>1e-9){
+  while(remaining>1e-9&&alive(c)&&world.active){
     const a=c.activity;
     if(a.kind==='tour'){
       let distance=0;let point:Point=c;for(const next of c.path){distance+=Math.hypot(next.x-point.x,next.y-point.y);point=next;}
       const duration=Math.min(remaining,c.wait>0?c.wait:distance/CONFIG.walkTilesPerGameSecond);
       if(duration<=1e-9){stepTour(world,c,0);continue;}
-      const from={x:c.x,y:c.y},walking=c.wait<=0;changeNeeds(c,duration,'awake',c.wait>0?'idle':'walk');stepTour(world,c,duration);if(walking)walkingNoise(world,c,from,duration,world.seconds-remaining+duration);remaining-=duration;continue;
+      const from={x:c.x,y:c.y},walking=c.wait<=0;changeNeeds(c,duration,'awake',c.wait>0?'idle':'walk',world);stepTour(world,c,duration);if(walking)walkingNoise(world,c,from,duration,world.seconds-remaining+duration);remaining-=duration;continue;
     }
-    if(a.kind==='idle'||a.kind==='rest'||a.kind==='hide'){changeNeeds(c,remaining,a.kind==='rest'?'rest':'awake');break;}
+    if(a.kind==='idle'||a.kind==='rest'||a.kind==='hide'){changeNeeds(c,remaining,a.kind==='rest'?'rest':'awake',undefined,world);break;}
+    if(a.kind==='combat'){
+      const z=world.zombies.find(z=>z.id===a.target&&!z.dead);if(!z){cancelStrike(c);idle(c,'대상 제압·소멸로 공격 종료');continue;}
+      const target=c.actionSource==='ai'?c.threat.memories[z.id]:z;
+      if(!target){cancelStrike(c);idle(c,'직접 본 대상 위치를 잃어 재관찰합니다.');continue;}
+      const range=a.move==='push'?1:c.fighter.equipped?1.3:1;
+      if(!c.fighter.pending&&Math.hypot(c.x-target.x,c.y-target.y)>range){
+        c.path=findPath(c,target,world.buildings)??[];
+        const from={x:c.x,y:c.y};let moved=0;let budget=CONFIG.walkTilesPerGameSecond*remaining;
+        while(c.path.length&&budget>1e-9){const p=c.path[0],d=Math.hypot(p.x-c.x,p.y-c.y);if(d<1e-9){c.path.shift();continue;}const amount=Math.min(d,budget),to={x:c.x+(p.x-c.x)/d*amount,y:c.y+(p.y-c.y)/d*amount},fraction=contactFraction(c,to,livingZombies(world));c.x+=(to.x-c.x)*fraction;c.y+=(to.y-c.y)*fraction;moved+=amount*fraction;budget-=amount;if(fraction<1)break;if(amount>=d-1e-9)c.path.shift();else break;}
+        const walking=moved/CONFIG.walkTilesPerGameSecond;if(walking>0){changeNeeds(c,walking,'awake','walk',world);walkingNoise(world,c,from,walking,world.seconds-remaining+walking);}if(remaining>walking)changeNeeds(c,remaining-walking,'awake','combat',world);
+      }else changeNeeds(c,remaining,'awake','combat',world);break;
+    }
     if(a.kind==='sleep'){
+
       const b=world.buildings.find(b=>b.id===a.buildingId);
       if(!b||!b.sleepSpot||!atBuilding(c,b)){idle(c,'수면 장소 조건이 달라져 잠에서 깼습니다.');record(world,`${c.name}: 수면 중단`);continue;}
       const target=c.actionSource==='ai'?20:0;
       const duration=Math.min(remaining,Math.max(0,c.fatigue-target)/sleepRecovery(c)*3600);
-      changeNeeds(c,duration,'sleep');remaining-=duration;
+      changeNeeds(c,duration,'sleep',undefined,world);remaining-=duration;
       if(c.fatigue<=target+1e-8){c.fatigue=target;idle(c,'수면으로 목표 피로까지 회복했습니다.');record(world,`${c.name}: 수면 완료`);}else break;
     }else if(a.kind==='travel'||a.kind==='explore'){
       if(!c.path.length){
@@ -144,18 +160,23 @@ export function advanceSurvival(world:World,c:Citizen,seconds:number){
       const p=c.path[0],dx=p.x-c.x,dy=p.y-c.y,distance=Math.hypot(dx,dy),duration=Math.min(remaining,distance/CONFIG.walkTilesPerGameSecond);
       if(duration>0){
         const from={x:c.x,y:c.y},to={x:c.x+(distance?dx/distance*CONFIG.walkTilesPerGameSecond*duration:0),y:c.y+(distance?dy/distance*CONFIG.walkTilesPerGameSecond*duration:0)};
-        const fraction=world.stageSix?contactFraction(from,to,world.zombies):1,walking=duration*fraction;
+        const fraction=world.stageSix?contactFraction(from,to,livingZombies(world)):1,walking=duration*fraction;
         c.x+=(to.x-c.x)*fraction;c.y+=(to.y-c.y)*fraction;
-        if(walking>0){changeNeeds(c,walking,'awake','walk');walkingNoise(world,c,from,walking,world.seconds-remaining+walking);}
-        if(fraction<1){changeNeeds(c,duration-walking,'awake','idle');c.threat.warning='접촉 위험 · 좀비와 겹치는 이동을 멈췄습니다. 직접 명령은 유지됩니다.';}
+        if(walking>0){changeNeeds(c,walking,'awake','walk',world);walkingNoise(world,c,from,walking,world.seconds-remaining+walking);}
+        if(fraction<1){changeNeeds(c,duration-walking,'awake','idle',world);c.threat.warning='접촉 위험 · 좀비와 겹치는 이동을 멈췄습니다. 직접 명령은 유지됩니다.';}
         remaining-=duration;
         if(fraction<1)break;
       }
       if(distance<=CONFIG.walkTilesPerGameSecond*duration+1e-8){c.x=p.x;c.y=p.y;c.path.shift();}else break;
     }else {
-      const duration=Math.min(remaining,a.remaining);changeNeeds(c,duration,'awake');a.remaining-=duration;remaining-=duration;
+      const duration=Math.min(remaining,a.remaining);changeNeeds(c,duration,'awake',undefined,world);a.remaining-=duration;remaining-=duration;
       if(a.remaining<=1e-8){
-        if(a.kind==='handling')completeHandling(world,c,a);
+        if(!alive(c))break;
+        if(a.kind==='bandage'){
+          const wound=c.fighter.wounds.find(x=>x.id===a.wound);
+          if(wound?.bleeding&&c.supplies.bandage>0){c.supplies.bandage--;world.consumed.bandage++;wound.bleeding=false;record(world,c.name+': 지혈 완료 · 감염 여부와 별개');}
+          idle(c,'붕대 작업 종료');
+        }else if(a.kind==='handling')completeHandling(world,c,a);
         else {
           const item=ITEMS.find(i=>i.id===a.item)!;
           if(c.supplies[a.item]<1){idle(c,'섭취할 물품이 없어 행동을 중단했습니다.');continue;}

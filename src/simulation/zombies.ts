@@ -1,15 +1,16 @@
+import { alive } from './combat.ts';
 import { findPath,walkable,record,type World,type Point } from './world.ts';
 import { canSee } from '../ai/perception.ts';
 import { distanceField,heardDistance,tileKey,type Noise } from './noise.ts';
 import { THREAT } from '../data/threat.ts';
 export interface Zombie extends Point {
-  id:number;state:'wander'|'search'|'chase';path:Point[];target:number|null;goal:Point|null;
+  health:number;dead:boolean;ready:number;stunned:number;strike:{target:number;due:number}|null;origin:number|null;id:number;state:'wander'|'search'|'chase';path:Point[];target:number|null;goal:Point|null;
   lastSeen:number|null;lastPosition:Point|null;nextSense:number;waitUntil:number|null;
   sound:{source:string;position:Point;score:number;heardAt:number;eventId:number}|null;
   processedNoise:number;sensitivity:number;reason:string;contact:number[];speed:number;
 }
 export function random(world:World){world.randomState=(Math.imul(world.randomState,1664525)+1013904223)>>>0;return world.randomState/4294967296;}
-export function makeZombie(id:number,p:Point):Zombie{return {...p,id,state:'wander',path:[],target:null,goal:null,lastSeen:null,lastPosition:null,nextSense:0,waitUntil:null,sound:null,processedNoise:-1,sensitivity:1,reason:'감지 정보 없음 · 배회',contact:[],speed:THREAT.wanderSpeed};}
+export function makeZombie(id:number,p:Point):Zombie{return {...p,health:60,dead:false,ready:0,stunned:0,strike:null,origin:null,id,state:'wander',path:[],target:null,goal:null,lastSeen:null,lastPosition:null,nextSense:0,waitUntil:null,sound:null,processedNoise:-1,sensitivity:1,reason:'감지 정보 없음 · 배회',contact:[],speed:THREAT.wanderSpeed};}
 export function spawnZombies(world:World,count:number=THREAT.population){
   const fields=world.citizens.map(c=>distanceField(world,c,THREAT.spawnHumanDistance));
   const candidates:Point[]=[];
@@ -46,7 +47,7 @@ function hear(world:World,z:Zombie){
 }
 export function senseZombie(world:World,z:Zombie){
   z.nextSense=world.seconds+THREAT.sense;
-  const visible=world.citizens.filter(c=>Math.hypot(c.x-z.x,c.y-z.y)<=THREAT.sight&&canSee(world,z,c)).sort((a,b)=>Math.hypot(a.x-z.x,a.y-z.y)-Math.hypot(b.x-z.x,b.y-z.y)||a.id-b.id);
+  const visible=world.citizens.filter(c=>alive(c)&&Math.hypot(c.x-z.x,c.y-z.y)<=THREAT.sight&&canSee(world,z,c)).sort((a,b)=>Math.hypot(a.x-z.x,a.y-z.y)-Math.hypot(b.x-z.x,b.y-z.y)||a.id-b.id);
   let chosen=visible[0];const current=visible.find(c=>c.id===z.target);
   if(current&&chosen&&Math.hypot(current.x-z.x,current.y-z.y)-Math.hypot(chosen.x-z.x,chosen.y-z.y)<2)chosen=current;
   if(chosen){
@@ -62,10 +63,11 @@ export function senseZombie(world:World,z:Zombie){
 }
 export function advanceZombies(world:World,seconds:number){
   for(const z of world.zombies){
+    if(z.dead||world.seconds<z.stunned||z.strike)continue;
     if(world.seconds+1e-8>=z.nextSense)senseZombie(world,z);
     const contacts=world.citizens.filter(c=>Math.hypot(c.x-z.x,c.y-z.y)<=THREAT.contact+1e-8);
     for(const c of contacts)if(!z.contact.includes(c.id)){
-      record(world,`${c.name}: 접촉 위험 · 피해·물림·감염 없음`);c.threat.contact=true;c.threat.warning='접촉 위험 · 안전 확보가 필요합니다.';
+      record(world,`${c.name}: 접촉 위험`);c.threat.contact=true;c.threat.warning='접촉 위험 · 안전 확보가 필요합니다.';
       if(c.activity.kind==='sleep'){c.activity={kind:'idle'};c.action='근접 접촉으로 각성';c.brain.nextSense=0;c.brain.nextThink=0;}
     }
     z.contact=contacts.map(c=>c.id);z.speed=z.state==='wander'?THREAT.wanderSpeed:THREAT.chaseSpeed;
@@ -75,7 +77,7 @@ export function advanceZombies(world:World,seconds:number){
       const p=z.path[0],distance=Math.hypot(p.x-z.x,p.y-z.y),amount=Math.min(distance,budget);
       // A segment must stop before entering the contact circle.
       let fraction=distance?amount/distance:1;
-      for(const c of world.citizens){
+      for(const c of world.citizens.filter(alive)){
         const dx=p.x-z.x,dy=p.y-z.y,ox=z.x-c.x,oy=z.y-c.y,A=dx*dx+dy*dy,B=2*(ox*dx+oy*dy),C=ox*ox+oy*oy-THREAT.contact**2,D=B*B-4*A*C;
         if(A&&D>=0){const t=(-B-Math.sqrt(D))/(2*A);if(t>=0&&t<=fraction)fraction=Math.min(fraction,t);}
       }

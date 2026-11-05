@@ -43,12 +43,13 @@ async function start(world:World){
   let last=performance.now(),lastUI=0;
   document.addEventListener('visibilitychange',()=>{last=performance.now();keys.clear();},options);
   scene.app.ticker.add(()=>{
-    if(!world.active){abort.abort();scene.destroy();showCreation(session.endReason);return;}
+    if(!world.active){const reason=world.endReason||session.endReason;abort.abort();scene.destroy();session.end(reason);showCreation(reason);return;}
     const now=performance.now(),dt=(now-last)/1000;last=now;
     // 숨긴 탭에서는 시제품을 진행하지 않으며, 복귀 후 누적 시간을 몰아서 계산하지 않는다.
     if(!document.hidden){if(dt<2)clock.advance(dt,world);else{clock.paused=true;ui.update();}
       const dx=(Number(keys.has('ArrowRight'))-Number(keys.has('ArrowLeft')))*300*dt;
       const dy=(Number(keys.has('ArrowDown'))-Number(keys.has('ArrowUp')))*300*dt;if(dx||dy)scene.pan(-dx,-dy);}
+    if(!world.active)return;
     scene.draw();if(now-lastUI>150){ui.update();lastUI=now;}
   });
 }
